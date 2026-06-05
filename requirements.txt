@@ -1,0 +1,43 @@
+# ==============================================================================
+# TalentBridge AI - Production Core Dependencies
+# ==============================================================================
+
+# --- Database Integration & Utilities ---
+python-dotenv==1.0.1
+pandas==2.2.2
+sqlalchemy==2.0.30
+psycopg2-binary==2.9.9
+
+# --- AI Orchestration & Multi-Agent Systems ---
+langchain==0.2.1
+langgraph==0.0.60
+langchain-anthropic==0.1.15
+langchain-openai==0.1.8
+langchain-community==0.2.1
+anthropic==0.28.0
+openai==1.30.1
+
+# --- Knowledge Retrieval & RAG Components ---
+chromadb==0.5.0
+faiss-cpu==1.8.0
+
+# --- Web Backend Architecture ---
+fastapi==0.111.0
+uvicorn==0.30.0
+
+# --- Frontend User Interface ---
+streamlit==1.35.0
+
+# --- Specialized Tools & API Wrappers ---
+tavily-python==0.3.3
+requests==2.32.2
+
+# --- Cron-scheduling & Task Orchestration ---
+apscheduler==3.10.4
+
+# --- Programmatic PDF Generation ---
+reportlab==4.2.0
+
+# --- Automated Testing Framework ---
+pytest==8.2.1
+python-dateutil==2.9.0.post0
