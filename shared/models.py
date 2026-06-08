@@ -5,9 +5,38 @@ These mirror the PostgreSQL tables and are used by all agents.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Optional, List
+from datetime import date, datetime
+from typing import Optional, List, Union
 
+
+# ─────────────────────────────────────────────
+# Date utility — used when building models from DB rows or user input
+# ─────────────────────────────────────────────
+
+def to_date(value: Union[str, date, datetime, None]) -> Optional[date]:
+    """
+    Convert anything date-like into a Python date object.
+
+    Handles:
+        "2024-11-01"         → date(2024, 11, 1)   string from LLM or DB
+        datetime(2024, 11,1) → date(2024, 11, 1)   datetime from psycopg2
+        date(2024, 11, 1)    → date(2024, 11, 1)   already correct
+        None                 → None                 optional fields
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        return date.fromisoformat(value.strip())
+    raise ValueError(f"Cannot convert {type(value)} to date: {value}")
+
+
+# ─────────────────────────────────────────────
+# Student
+# ─────────────────────────────────────────────
 
 @dataclass
 class Student:
@@ -32,14 +61,18 @@ class Student:
     created_at:          Optional[datetime] = None
 
 
+# ─────────────────────────────────────────────
+# Campaign
+# ─────────────────────────────────────────────
+
 @dataclass
 class Campaign:
     campaign_id:          Optional[int]
     campaign_name:        str
     selected_keywords:    List[str]
-    date_range_start:     str
-    date_range_end:       str
-    campaign_end_date:    str = ""
+    date_range_start:     date
+    date_range_end:       date
+    campaign_end_date:    Optional[date] = None
     followup_days:        int = 3
     inbox_check_minutes:  int = 5
     status:               str = "pending"
@@ -53,6 +86,10 @@ class Campaign:
     created_at:           Optional[datetime] = None
 
 
+# ─────────────────────────────────────────────
+# Job Posting
+# ─────────────────────────────────────────────
+
 @dataclass
 class JobPosting:
     job_id:               Optional[int]
@@ -61,7 +98,7 @@ class JobPosting:
     description_text:     str
     location:             str
     country:              str
-    date_posted_parsed:   Optional[str] = None
+    date_posted_parsed:   Optional[date] = None
     company_rating:       Optional[float] = None
     company_link:         Optional[str] = None
     apply_link:           Optional[str] = None
@@ -69,103 +106,135 @@ class JobPosting:
     input_discovery_input_keyword_search: str = ""
 
 
+# ─────────────────────────────────────────────
+# Job Analysis
+# ─────────────────────────────────────────────
+
 @dataclass
 class JobAnalysis:
-    analysis_id:           Optional[int]
-    job_id:                int
-    campaign_id:           int
-    extracted_skills:      List[str]
-    experience_level:      str        # Junior | Mid | Senior | Not specified
-    job_type:              str        # Full-time | Part-time | Remote | Hybrid | Not specified
-    key_responsibilities:  List[str]
+    analysis_id:            Optional[int]
+    job_id:                 int
+    campaign_id:            int
+    extracted_skills:       List[str]
+    experience_level:       str         # Junior | Mid | Senior | Not specified
+    job_type:               str         # Full-time | Part-time | Remote | Hybrid
+    key_responsibilities:   List[str]
     qualifications_summary: Optional[str] = None
-    llm_model_used:        Optional[str] = None
+    llm_model_used:         Optional[str] = None
 
+
+# ─────────────────────────────────────────────
+# Job Match
+# ─────────────────────────────────────────────
 
 @dataclass
 class JobMatch:
-    match_id:              Optional[int]
-    campaign_id:           int
-    job_id:                int
-    student_id:            int
-    keyword_match_score:   float
-    semantic_match_score:  float
-    overall_match_score:   float
-    matched_skills:        List[str]
-    matched_at:            Optional[datetime] = None
+    match_id:             Optional[int]
+    campaign_id:          int
+    job_id:               int
+    student_id:           int
+    keyword_match_score:  float
+    semantic_match_score: float
+    overall_match_score:  float
+    matched_skills:       List[str]
+    matched_at:           Optional[datetime] = None
 
+
+# ─────────────────────────────────────────────
+# Contact
+# ─────────────────────────────────────────────
 
 @dataclass
 class Contact:
-    contact_id:        Optional[int]
-    company_name:      str
-    contact_email:     str
-    contact_source:    str            # Hunter.io | Web Search | Best Guess
-    contact_name:      Optional[str] = None
-    contact_title:     Optional[str] = None
-    contact_verified:  bool = False
-    confidence_score:  float = 0.5
-    created_at:        Optional[datetime] = None
+    contact_id:       Optional[int]
+    company_name:     str
+    contact_email:    str
+    contact_source:   str           # Hunter.io | Web Search | Best Guess
+    contact_name:     Optional[str] = None
+    contact_title:    Optional[str] = None
+    contact_verified: bool = False
+    confidence_score: float = 0.5
+    created_at:       Optional[datetime] = None
 
+
+# ─────────────────────────────────────────────
+# Company Research
+# ─────────────────────────────────────────────
 
 @dataclass
 class CompanyResearch:
     research_id:               Optional[int]
     company_name:              str
     research_summary:          str
-    company_type:              str    # Large Enterprise | Tech Startup | Government | Consulting | SME
-    classification_confidence: str   # High | Medium | Low
+    company_type:              str      # Large Enterprise | Tech Startup | Government | Consulting | SME
+    classification_confidence: str     # High | Medium | Low
     why_interested:            Optional[str] = None
     recent_news_hook:          Optional[str] = None
 
 
+# ─────────────────────────────────────────────
+# Email Strategy
+# ─────────────────────────────────────────────
+
 @dataclass
 class EmailStrategy:
-    strategy_id:   Optional[int]
-    campaign_id:   int
-    company_name:  str
-    tone:          str    # Formal | Conversational
-    angle:         str    # Skills Match | Company News | Cohort Size
-    email_length:  str    # Short | Medium | Long
+    strategy_id:    Optional[int]
+    campaign_id:    int
+    company_name:   str
+    tone:           str     # Formal | Conversational
+    angle:          str     # Skills Match | Company News | Cohort Size
+    email_length:   str     # Short | Medium | Long
     call_to_action: str
-    playbook_used: str
+    playbook_used:  str
 
+
+# ─────────────────────────────────────────────
+# Email
+# ─────────────────────────────────────────────
 
 @dataclass
 class Email:
-    email_id:          Optional[int]
-    campaign_id:       int
-    email_type:        str            # Employer Outreach | Student Notification | Follow-up | Scheduling
-    recipient_email:   str
-    subject:           str
-    body:              str            # ← was "text" in original — that's a Python keyword, use str
-    status:            str = "Pending Approval"   # Pending Approval | Approved | Rejected | Sent | Failed
-    recipient_name:    Optional[str] = None
-    company_name:      Optional[str] = None
-    student_id:        Optional[int] = None
-    contact_id:        Optional[int] = None
-    contact_verified:  bool = False
-    rejection_reason:  Optional[str] = None
-    approved_by:       Optional[str] = None
-    approved_at:       Optional[datetime] = None
-    sent_at:           Optional[datetime] = None
-    created_at:        Optional[datetime] = None
+    email_id:         Optional[int]
+    campaign_id:      int
+    email_type:       str           # Employer Outreach | Student Notification | Follow-up | Scheduling
+    recipient_email:  str
+    subject:          str
+    body:             str
+    status:           str = "Pending Approval"  # Pending Approval | Approved | Rejected | Sent | Failed
+    recipient_name:   Optional[str] = None
+    company_name:     Optional[str] = None
+    student_id:       Optional[int] = None
+    contact_id:       Optional[int] = None
+    contact_verified: bool = False
+    rejection_reason: Optional[str] = None
+    approved_by:      Optional[str] = None
+    approved_at:      Optional[datetime] = None
+    sent_at:          Optional[datetime] = None
+    created_at:       Optional[datetime] = None
 
+
+# ─────────────────────────────────────────────
+# Reply
+# ─────────────────────────────────────────────
 
 @dataclass
 class Reply:
-    reply_id:        Optional[int]
-    email_id:        int
-    campaign_id:     int
-    company_name:    str
-    reply_from:      str
-    reply_body:      str
-    classification:  str = "Pending Classification"  # Interested | Neutral | Negative | Auto-reply
-    reply_subject:   Optional[str] = None
-    received_at:     Optional[datetime] = None
-    classified_at:   Optional[datetime] = None
-    llm_model_used:  Optional[str] = None
+    reply_id:       Optional[int]
+    email_id:       int
+    campaign_id:    int
+    company_name:   str
+    reply_from:     str
+    reply_body:     str
+    classification: str = "Pending Classification"  # Interested | Neutral | Negative | Auto-reply
+    reply_subject:  Optional[str] = None
+    received_at:    Optional[datetime] = None
+    classified_at:  Optional[datetime] = None
+    llm_model_used: Optional[str] = None
 
+
+# ─────────────────────────────────────────────
+# Follow-Up
+# ─────────────────────────────────────────────
 
 @dataclass
 class FollowUp:
@@ -173,12 +242,16 @@ class FollowUp:
     campaign_id:       int
     email_id:          int
     company_name:      str
-    reason:            str    # No Reply | Neutral Reply Needs Answer | Interested Needs Scheduling
-    status:            str = "Pending"   # Pending | Approved | Sent | Skipped
+    reason:            str      # No Reply | Neutral Reply | Interested Needs Scheduling
+    status:            str = "Pending"  # Pending | Approved | Sent | Skipped
     followup_email_id: Optional[int] = None
     suggested_at:      Optional[datetime] = None
     sent_at:           Optional[datetime] = None
 
+
+# ─────────────────────────────────────────────
+# Meeting
+# ─────────────────────────────────────────────
 
 @dataclass
 class Meeting:
