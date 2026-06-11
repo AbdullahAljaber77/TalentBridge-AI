@@ -46,7 +46,7 @@ class Student:
     skills:              List[str]
     experience_years:    str
     location:            str
-    field:               str = ""
+    field_of_study:               str = ""
     status:              str = ""
     phone:               Optional[str] = None
     linkedin_url:        Optional[str] = None
