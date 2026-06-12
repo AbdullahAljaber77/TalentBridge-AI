@@ -13,7 +13,7 @@ from shared.config import ANTHROPIC_API_KEY
 # Setup
 # ─────────────────────────────────────────────
 
-DEFAULT_MODEL      = "claude-sonnet-4-20250514"
+DEFAULT_MODEL      = "claude-sonnet-4-5"
 DEFAULT_MAX_TOKENS = 1500
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
