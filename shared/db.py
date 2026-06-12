@@ -158,6 +158,19 @@ def save_job_match(campaign_id: int, job_id: int, student_id: int,
     cursor.close()
     conn.close()
 
+def update_student_summary(student_id: int, summary: str) -> None:
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE student_profiles
+        SET summary = %s
+        WHERE student_id = %s
+    """, (summary, student_id))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 # ─────────────────────────────────────────────
 # Agent 03 — Contact Discovery Agent
