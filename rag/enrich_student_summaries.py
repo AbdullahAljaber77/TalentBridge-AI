@@ -9,7 +9,8 @@ def enrich_summaries():
 
     for student in missing:
         prompt = (
-            f"Write a 1-2 sentence professional summary for this candidate:\n"
+            f"Write a 1-2 sentence professional summary for this candidate. "
+            f"Output ONLY the summary text itself — no headers, no markdown, no labels.\n\n"
             f"Field: {student.field_of_study}\n"
             f"Experience: {student.experience_years}\n"
             f"Skills: {', '.join(student.skills)}\n"
