@@ -8,6 +8,10 @@ def enrich_summaries():
     print(f"{len(missing)} students need a summary")
 
     for student in missing:
+        if not student.skills:
+            print(f"  SKIPPED — {student.full_name} (student_id={student.student_id}) has no skills and no summary")
+            continue
+
         prompt = (
             f"Write a 1-2 sentence professional summary for this candidate. "
             f"Output ONLY the summary text itself — no headers, no markdown, no labels.\n\n"
