@@ -25,12 +25,184 @@ def get_connection():
 # Agent 01 — Job Analysis Agent
 # ─────────────────────────────────────────────
 
-# TODO: Osama will add functions here
-# Examples:
-#   save_job_analysis(...)
-#   update_campaign_status(...)
 
-
+def get_campaign(campaign_id: int) -> dict:
+    conn = get_connection()
+    cursor = conn.cursor()
+ 
+    cursor.execute("""
+        SELECT campaign_id, campaign_name, selected_keywords,
+               date_range_start, date_range_end, status
+        FROM campaigns
+        WHERE campaign_id = %s
+    """, (campaign_id,))
+ 
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+ 
+    if not row:
+        return None
+ 
+    return {
+        "campaign_id"      : row[0],
+        "campaign_name"    : row[1],
+        "selected_keywords": row[2],
+        "date_range_start" : row[3],
+        "date_range_end"   : row[4],
+        "status"           : row[5],
+    }
+ 
+ 
+def get_jobs_for_campaign(keywords: list[str], date_from,
+                          campaign_id: int, limit: int = None) -> list[JobPosting]:
+    conn = get_connection()
+    cursor = conn.cursor()
+ 
+    # Filter by selected keywords + date range, and skip jobs already
+    # analysed for this campaign (so the agent is safe to restart).
+    cursor.execute("""
+        SELECT job_id, company_name, job_title, description_text,
+               location, country
+        FROM job_postings
+        WHERE input_discovery_input_keyword_search = ANY(%s)
+          AND (%s::date IS NULL OR date_posted_parsed >= %s::date)
+          AND job_id NOT IN (
+              SELECT job_id FROM job_analysis WHERE campaign_id = %s
+          )
+        LIMIT %s
+    """, (keywords, date_from, date_from, campaign_id, limit))
+ 
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+ 
+    jobs = []
+    for row in rows:
+        jobs.append(JobPosting(
+            job_id           = row[0],
+            company_name     = row[1],
+            job_title        = row[2],
+            description_text = row[3],
+            location         = row[4],
+            country          = row[5],
+        ))
+ 
+    return jobs
+ 
+ 
+def save_job_analysis(campaign_id: int, job_id: int,
+                      extracted_skills: list[str], experience_level: str,
+                      job_type: str, key_responsibilities: list[str],
+                      qualifications_summary: str,
+                      llm_model_used: str) -> None:
+ 
+    conn = get_connection()
+    cursor = conn.cursor()
+ 
+    cursor.execute("""
+        INSERT INTO job_analysis
+            (job_id, campaign_id, extracted_skills, experience_level,
+             job_type, key_responsibilities, qualifications_summary,
+             llm_model_used)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (job_id, campaign_id) DO NOTHING
+    """, (job_id, campaign_id, extracted_skills, experience_level,
+          job_type, key_responsibilities, qualifications_summary,
+          llm_model_used))
+ 
+    conn.commit()
+    cursor.close()
+    conn.close()
+ 
+ 
+def start_campaign(campaign_id: int, total_jobs_found: int,
+                   total_batches: int) -> None:
+ 
+    conn = get_connection()
+    cursor = conn.cursor()
+ 
+    cursor.execute("""
+        UPDATE campaigns
+        SET status           = 'running',
+            total_jobs_found = %s,
+            total_batches    = %s,
+            jobs_processed   = 0,
+            jobs_failed      = 0,
+            started_at       = NOW(),
+            last_updated     = NOW()
+        WHERE campaign_id = %s
+    """, (total_jobs_found, total_batches, campaign_id))
+ 
+    conn.commit()
+    cursor.close()
+    conn.close()
+ 
+ 
+def update_current_batch(campaign_id: int, current_batch: int) -> None:
+    conn = get_connection()
+    cursor = conn.cursor()
+ 
+    cursor.execute("""
+        UPDATE campaigns
+        SET current_batch = %s,
+            last_updated  = NOW()
+        WHERE campaign_id = %s
+    """, (current_batch, campaign_id))
+ 
+    conn.commit()
+    cursor.close()
+    conn.close()
+ 
+ 
+def increment_jobs_processed(campaign_id: int) -> None:
+    conn = get_connection()
+    cursor = conn.cursor()
+ 
+    cursor.execute("""
+        UPDATE campaigns
+        SET jobs_processed = jobs_processed + 1,
+            last_updated   = NOW()
+        WHERE campaign_id = %s
+    """, (campaign_id,))
+ 
+    conn.commit()
+    cursor.close()
+    conn.close()
+ 
+ 
+def increment_jobs_failed(campaign_id: int) -> None:
+    conn = get_connection()
+    cursor = conn.cursor()
+ 
+    cursor.execute("""
+        UPDATE campaigns
+        SET jobs_failed  = jobs_failed + 1,
+            last_updated = NOW()
+        WHERE campaign_id = %s
+    """, (campaign_id,))
+ 
+    conn.commit()
+    cursor.close()
+    conn.close()
+ 
+ 
+def complete_campaign(campaign_id: int) -> None:
+    conn = get_connection()
+    cursor = conn.cursor()
+ 
+    cursor.execute("""
+        UPDATE campaigns
+        SET status       = 'complete',
+            completed_at = NOW(),
+            last_updated = NOW()
+        WHERE campaign_id = %s
+    """, (campaign_id,))
+ 
+    conn.commit()
+    cursor.close()
+    conn.close()
+ 
 # ─────────────────────────────────────────────
 # Agent 02 — Targeting Agent
 # ─────────────────────────────────────────────

@@ -62,7 +62,7 @@ class Student:
 
 
 # ─────────────────────────────────────────────
-# Campaign
+# Campaign      *added 6 missing fields*
 # ─────────────────────────────────────────────
 
 @dataclass
@@ -78,16 +78,22 @@ class Campaign:
     status:               str = "pending"
     total_jobs_found:     int = 0
     jobs_processed:       int = 0
+    jobs_failed:          int = 0           
+    current_batch:        int = 0          
+    total_batches:        int = 0           
     emails_generated:     int = 0
     emails_approved:      int = 0
     emails_sent:          int = 0
     replies_received:     int = 0
     meetings_booked:      int = 0
+    started_at:           Optional[datetime] = None   
+    completed_at:         Optional[datetime] = None   
+    last_updated:         Optional[datetime] = None   
     created_at:           Optional[datetime] = None
-
+ 
 
 # ─────────────────────────────────────────────
-# Job Posting
+# Job Posting       *added domain, input_discovery_input_domain, loaded_at*
 # ─────────────────────────────────────────────
 
 @dataclass
@@ -101,13 +107,16 @@ class JobPosting:
     date_posted_parsed:   Optional[date] = None
     company_rating:       Optional[float] = None
     company_link:         Optional[str] = None
+    domain:               Optional[str] = None                    
     apply_link:           Optional[str] = None
     url:                  Optional[str] = None
-    input_discovery_input_keyword_search: str = ""
-
+    input_discovery_input_domain:          Optional[str] = None  
+    input_discovery_input_keyword_search:  str = ""
+    loaded_at:            Optional[datetime] = None              
+ 
 
 # ─────────────────────────────────────────────
-# Job Analysis
+# Job Analysis      *added processed_at*
 # ─────────────────────────────────────────────
 
 @dataclass
@@ -116,12 +125,13 @@ class JobAnalysis:
     job_id:                 int
     campaign_id:            int
     extracted_skills:       List[str]
-    experience_level:       str         # Junior | Mid | Senior | Not specified
-    job_type:               str         # Full-time | Part-time | Remote | Hybrid
+    experience_level:       str
+    job_type:               str
     key_responsibilities:   List[str]
     qualifications_summary: Optional[str] = None
     llm_model_used:         Optional[str] = None
-
+    processed_at:           Optional[datetime] = None   
+ 
 
 # ─────────────────────────────────────────────
 # Job Match
