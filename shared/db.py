@@ -349,10 +349,151 @@ def update_student_summary(student_id: int, summary: str) -> None:
 # Agent 03 — Contact Discovery Agent
 # ─────────────────────────────────────────────
 
-# TODO: Abdullah will add functions here
-# Examples:
-#   save_contact(...)
-#   get_contacts_by_company(...)
+from psycopg2.extras import RealDictCursor
+
+
+def fetchone(query: str, params: tuple = ()):
+    conn = get_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor.execute(query, params)
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return dict(row) if row else None
+
+
+def fetchall(query: str, params: tuple = ()):
+    conn = get_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def execute(query: str, params: tuple = ()):
+    conn = get_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor.execute(query, params)
+
+    row = None
+    try:
+        row = cursor.fetchone()
+    except Exception:
+        row = None
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return dict(row) if row else None
+
+
+def get_company_targets_for_contact_discovery(campaign_id: int):
+    query = """
+        SELECT DISTINCT
+            jp.company_name,
+            jp.domain,
+            jp.company_link,
+            jp.url,
+            jp.input_discovery_input_domain
+        FROM job_matches jm
+        JOIN job_postings jp ON jm.job_id = jp.job_id
+        WHERE jm.campaign_id = %s
+        ORDER BY jp.company_name
+    """
+    return fetchall(query, (campaign_id,))
+
+
+def get_cached_contact(company_name: str):
+    query = """
+        SELECT
+            contact_id,
+            company_name,
+            contact_name,
+            contact_email,
+            contact_title,
+            contact_verified,
+            contact_source,
+            confidence_score
+        FROM contacts
+        WHERE company_name = %s
+        ORDER BY confidence_score DESC NULLS LAST, last_used_at DESC NULLS LAST
+        LIMIT 1
+    """
+    return fetchone(query, (company_name,))
+
+
+def save_contact(
+    company_name: str,
+    contact_email: str,
+    contact_name=None,
+    contact_title=None,
+    contact_verified: bool = False,
+    contact_source: str = "Best Guess",
+    confidence_score: float = 0.2
+):
+    query = """
+        INSERT INTO contacts (
+            company_name,
+            contact_name,
+            contact_email,
+            contact_title,
+            contact_verified,
+            contact_source,
+            confidence_score,
+            last_used_at,
+            created_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+        ON CONFLICT (company_name, contact_email)
+        DO UPDATE SET
+            contact_name = COALESCE(EXCLUDED.contact_name, contacts.contact_name),
+            contact_title = COALESCE(EXCLUDED.contact_title, contacts.contact_title),
+            contact_verified = EXCLUDED.contact_verified,
+            contact_source = EXCLUDED.contact_source,
+            confidence_score = EXCLUDED.confidence_score,
+            last_used_at = NOW()
+        RETURNING contact_id
+    """
+    return execute(query, (
+        company_name,
+        contact_name,
+        contact_email,
+        contact_title,
+        contact_verified,
+        contact_source,
+        confidence_score
+    ))
+
+
+def update_contact_last_used(contact_id: int):
+    query = """
+        UPDATE contacts
+        SET last_used_at = NOW()
+        WHERE contact_id = %s
+    """
+    execute(query, (contact_id,))
+
+
+def update_campaign_status(campaign_id: int, status: str):
+    query = """
+        UPDATE campaigns
+        SET status = %s,
+            last_updated = NOW()
+        WHERE campaign_id = %s
+    """
+    execute(query, (status, campaign_id))
+
+
+def touch_campaign(campaign_id: int):
+    query = """
+        UPDATE campaigns
+        SET last_updated = NOW()
+        WHERE campaign_id = %s
+    """
+    execute(query, (campaign_id,))
 
 
 # ─────────────────────────────────────────────
