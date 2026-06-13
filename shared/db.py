@@ -78,6 +78,7 @@ def get_all_students() -> list[Student]:
                summary, preferred_job_type, preferred_location,
                expected_salary, available_to_start, cv_url, consent, is_mock
         FROM student_profiles
+        ORDER BY student_id ASC
     """)
 
     rows = cursor.fetchall()

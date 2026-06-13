@@ -1,7 +1,13 @@
+import faiss
+import json
+from pathlib import Path
 from shared.db import get_all_students
 from sentence_transformers import SentenceTransformer
 
 EMBED_MODEL = "all-MiniLM-L6-v2"
+INDEX_DIR  = Path("faiss_index")
+INDEX_FILE = INDEX_DIR / "student_index.faiss"
+IDS_FILE   = INDEX_DIR / "student_ids.json"
 
 def student_to_text(student):
     skills_str = ", ".join(student.skills) if student.skills else "No skills listed"
@@ -40,4 +46,28 @@ def build_student_index():
     vectors = model.encode(texts, show_progress_bar=True)
     print(f"\nAll vectors shape: {vectors.shape}")
 
+    # ── Stage 4: save FAISS index + ID mapping ──────────────────────
+    INDEX_DIR.mkdir(exist_ok=True)
+
+    dim = vectors.shape[1]  # 384
+    index = faiss.IndexFlatL2(dim)
+    index.add(vectors)
+
+    faiss.write_index(index, str(INDEX_FILE))
+    print(f"\nSaved FAISS index to {INDEX_FILE}")
+
+    metadata = [{"student_id": s.student_id, "full_name": s.full_name} for s in valid_students]
+    with open(IDS_FILE, "w", encoding="utf-8") as f:
+        json.dump(metadata, f, indent=2)
+    print(f"Saved student ID mapping to {IDS_FILE}")
+
     return valid_students, vectors
+
+def load_student_index():
+    index = faiss.read_index(str(INDEX_FILE))
+
+    with open(IDS_FILE, "r", encoding="utf-8") as f:
+        metadata = json.load(f)
+
+    print(f"Loaded FAISS index with {index.ntotal} vectors")
+    return index, metadata
