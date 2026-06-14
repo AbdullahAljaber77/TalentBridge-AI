@@ -48,7 +48,11 @@ INSTRUCTION = (
     "qualifications_summary.\n"
     "Rules:\n"
     "- extracted_skills: all technical and soft skills mentioned\n"
-    "- experience_level: Junior (0-2y) | Mid (3-5y) | Senior (6+y) | Not specified\n"
+    "- experience_level: use EXACTLY one of these four values only: "
+    "Junior | Mid | Senior | Not specified\n"
+    "  Junior = 0-2 years required, Mid = 3-5 years required, "
+    "  Senior = 6+ years required, Not specified = no years mentioned\n"
+    "  Do NOT add years, parentheses, or any other text\n"
     "- job_type: Full-time | Part-time | Remote | Hybrid | Not specified\n"
     "- key_responsibilities: maximum 5 most important\n"
     "- qualifications_summary: one sentence"
@@ -141,15 +145,29 @@ def run(campaign_id: int, limit: int = None) -> dict:
             )
             db.increment_jobs_processed(campaign_id)
             processed += 1
+
+            print(f"   ✓ job {job.job_id} ({job.company_name[:30]}) — "
+                    f"{len(analysis['extracted_skills'])} skills, "
+                    f"level={analysis['experience_level']}")
+           
  
         # Delay between batches (not after the last one)
         if batch_index < total_batches - 1:
             time.sleep(BATCH_DELAY_SECONDS)
  
-    # STEP 4 — Mark campaign complete, signal next agent
+    # STEP 4 — Mark campaign complete or failed, signal next agent
+    if processed == 0 and total > 0:
+        db.fail_campaign(campaign_id)
+        print(f"Done. processed={processed} failed={failed} — marking campaign as failed.")
+        return {
+            "status": "failed",
+            "campaign_id": campaign_id,
+            "processed": processed,
+            "failed": failed,
+        }
+
     db.complete_campaign(campaign_id)
     print(f"Done. processed={processed} failed={failed}")
- 
     return {
         "status": "complete",
         "campaign_id": campaign_id,

@@ -8,11 +8,13 @@ Parameters (all tunable):
     min_match_score   : minimum overall score to save a match (default 0.2)
     experience_strict : True = exact level match, False = allow one level down (default True)
 """
-
 from sentence_transformers import SentenceTransformer
 
 from rag.student_embeddings import load_student_index, EMBED_MODEL
 from shared.db import get_job_analyses, get_all_students, get_job_posting, save_job_match
+
+# Load once at module level — not inside the function
+embed_model = SentenceTransformer(EMBED_MODEL)
 
 
 # ─────────────────────────────────────────────
@@ -36,8 +38,8 @@ def keyword_match(job_skills: list[str], student_skills: list[str]) -> tuple[flo
 # ─────────────────────────────────────────────
 
 EXPERIENCE_MAP = {
-    "Junior": ["No experience yet", "Less than 1 year", "1–2 years"],
-    "Mid":    ["3–5 years"],
+    "Junior": ["No experience yet", "Less than 1 year", "1-2 years"],
+    "Mid":    ["3-5 years"],
     "Senior": ["5+ years"],
 }
 
@@ -93,7 +95,7 @@ def semantic_match(job_description: str, faiss_index, faiss_metadata, embed_mode
 # ─────────────────────────────────────────────
 
 def combined_score(keyword_score: float, semantic_score: float) -> float:
-    return round((keyword_score * 0.5) + (semantic_score * 0.5), 4)
+    return round((keyword_score * 0.3) + (semantic_score * 0.7), 4)
 
 
 # ─────────────────────────────────────────────
@@ -109,7 +111,6 @@ def run_targeting_agent(
     job_analyses = get_job_analyses(campaign_id)
     students = get_all_students()
     faiss_index, faiss_metadata = load_student_index()
-    embed_model = SentenceTransformer(EMBED_MODEL)
 
     print(f"Settings: min_match_score={min_match_score}, experience_strict={experience_strict}, top_k={top_k}")
 
@@ -166,6 +167,11 @@ def run_targeting_agent(
         print(f"  -> {len(candidates)} matches saved")
 
     print(f"\nDone. Total matches saved: {total_matches}")
+    return {
+        "status"        : "complete",
+        "campaign_id"   : campaign_id,
+        "total_matches" : total_matches,
+    }
 
 
 if __name__ == "__main__":

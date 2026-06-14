@@ -57,38 +57,46 @@ def get_campaign(campaign_id: int) -> dict:
 def get_jobs_for_campaign(keywords: list[str], date_from,
                           campaign_id: int, limit: int = None) -> list[JobPosting]:
     conn = get_connection()
-    cursor = conn.cursor()
- 
-    # Filter by selected keywords + date range, and skip jobs already
-    # analysed for this campaign (so the agent is safe to restart).
-    cursor.execute("""
-        SELECT job_id, company_name, job_title, description_text,
-               location, country
-        FROM job_postings
-        WHERE input_discovery_input_keyword_search = ANY(%s)
-          AND (%s::date IS NULL OR date_posted_parsed >= %s::date)
-          AND job_id NOT IN (
-              SELECT job_id FROM job_analysis WHERE campaign_id = %s
-          )
-        LIMIT %s
-    """, (keywords, date_from, date_from, campaign_id, limit))
- 
-    rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
- 
-    jobs = []
-    for row in rows:
-        jobs.append(JobPosting(
-            job_id           = row[0],
-            company_name     = row[1],
-            job_title        = row[2],
-            description_text = row[3],
-            location         = row[4],
-            country          = row[5],
-        ))
- 
-    return jobs
+    try:
+        with conn.cursor() as cursor:
+
+            query = """
+                SELECT job_id, company_name, job_title, description_text,
+               location, country, domain
+                FROM job_postings
+                WHERE LOWER(input_discovery_input_keyword_search) = ANY(
+                    SELECT LOWER(k) FROM UNNEST(%s::text[]) k
+                )
+                    AND (%s::date IS NULL OR date_posted_parsed >= %s::date)
+                    AND job_id NOT IN (
+                        SELECT job_id FROM job_analysis WHERE campaign_id = %s
+                    )
+            """
+            params = [keywords, date_from, date_from, campaign_id]
+
+            if limit is not None:
+                query += " LIMIT %s"
+                params.append(limit)
+
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+
+        jobs = []
+        for row in rows:
+            jobs.append(JobPosting(
+                job_id           = row[0],
+                company_name     = row[1],
+                job_title        = row[2],
+                description_text = row[3],
+                location         = row[4],
+                country          = row[5],
+                domain           = row[6],
+            ))
+
+        return jobs
+
+    finally:
+        conn.close()
  
  
 def save_job_analysis(campaign_id: int, job_id: int,
@@ -96,24 +104,24 @@ def save_job_analysis(campaign_id: int, job_id: int,
                       job_type: str, key_responsibilities: list[str],
                       qualifications_summary: str,
                       llm_model_used: str) -> None:
- 
+
     conn = get_connection()
-    cursor = conn.cursor()
- 
-    cursor.execute("""
-        INSERT INTO job_analysis
-            (job_id, campaign_id, extracted_skills, experience_level,
-             job_type, key_responsibilities, qualifications_summary,
-             llm_model_used)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (job_id, campaign_id) DO NOTHING
-    """, (job_id, campaign_id, extracted_skills, experience_level,
-          job_type, key_responsibilities, qualifications_summary,
-          llm_model_used))
- 
-    conn.commit()
-    cursor.close()
-    conn.close()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO job_analysis
+                    (job_id, campaign_id, extracted_skills, experience_level,
+                     job_type, key_responsibilities, qualifications_summary,
+                     llm_model_used)
+                VALUES (%s, %s, %s::text[], %s, %s, %s::text[], %s, %s)
+                ON CONFLICT (job_id, campaign_id) DO NOTHING
+            """, (job_id, campaign_id, extracted_skills, experience_level,
+                  job_type, key_responsibilities, qualifications_summary,
+                  llm_model_used))
+
+        conn.commit()
+    finally:
+        conn.close()
  
  
 def start_campaign(campaign_id: int, total_jobs_found: int,
@@ -202,6 +210,21 @@ def complete_campaign(campaign_id: int) -> None:
     conn.commit()
     cursor.close()
     conn.close()
+
+def fail_campaign(campaign_id: int) -> None:
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                UPDATE campaigns
+                SET status       = 'failed',
+                    completed_at = NOW(),
+                    last_updated = NOW()
+                WHERE campaign_id = %s
+            """, (campaign_id,))
+        conn.commit()
+    finally:
+        conn.close()
  
 # ─────────────────────────────────────────────
 # Agent 02 — Targeting Agent
