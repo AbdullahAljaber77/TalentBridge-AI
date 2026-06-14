@@ -2,6 +2,11 @@
 Agent 02 — Targeting Agent
 Matches students to jobs using keyword overlap, experience/location
 filters, and semantic similarity (FAISS).
+
+Parameters (all tunable):
+    campaign_id       : which campaign to process
+    min_match_score   : minimum overall score to save a match (default 0.2)
+    experience_strict : True = exact level match, False = allow one level down (default True)
 """
 
 from sentence_transformers import SentenceTransformer
@@ -36,19 +41,26 @@ EXPERIENCE_MAP = {
     "Senior": ["5+ years"],
 }
 
-def experience_compatible(job_level: str, student_years: str) -> bool:
+def experience_compatible(job_level: str, student_years: str, strict: bool = True) -> bool:
     if job_level not in EXPERIENCE_MAP:
         return True  # "Not specified" → everyone passes
 
-    return student_years in EXPERIENCE_MAP[job_level]
+    if strict:
+        return student_years in EXPERIENCE_MAP[job_level]
+
+    # Lenient: allow one level down
+    allowed = EXPERIENCE_MAP[job_level].copy()
+    if job_level == "Mid":
+        allowed += EXPERIENCE_MAP["Junior"]
+    if job_level == "Senior":
+        allowed += EXPERIENCE_MAP["Mid"]
+
+    return student_years in allowed
 
 
 # ─────────────────────────────────────────────
 # Location filter
 # ─────────────────────────────────────────────
-
-MIN_MATCH_SCORE = 0.2
-
 
 OPEN_LOCATION_TOKENS = {"Anywhere in KSA", "Open to relocation", "Remote only"}
 
@@ -88,11 +100,18 @@ def combined_score(keyword_score: float, semantic_score: float) -> float:
 # Main agent
 # ─────────────────────────────────────────────
 
-def run_targeting_agent(campaign_id: int):
+def run_targeting_agent(
+    campaign_id: int,
+    min_match_score: float = 0.2,
+    experience_strict: bool = True,
+    top_k: int = 5,
+):
     job_analyses = get_job_analyses(campaign_id)
     students = get_all_students()
     faiss_index, faiss_metadata = load_student_index()
     embed_model = SentenceTransformer(EMBED_MODEL)
+
+    print(f"Settings: min_match_score={min_match_score}, experience_strict={experience_strict}, top_k={top_k}")
 
     total_matches = 0
 
@@ -104,11 +123,12 @@ def run_targeting_agent(campaign_id: int):
             job_posting.description_text, faiss_index, faiss_metadata, embed_model
         )
 
-        job_match_count = 0
+        # Collect all passing matches for this job
+        candidates = []
         for student in students:
             kw_score, matched_skills = keyword_match(job_analysis.extracted_skills, student.skills)
 
-            if not experience_compatible(job_analysis.experience_level, student.experience_years):
+            if not experience_compatible(job_analysis.experience_level, student.experience_years, strict=experience_strict):
                 continue
             if not location_compatible(job_posting.location, student.preferred_location):
                 continue
@@ -116,26 +136,42 @@ def run_targeting_agent(campaign_id: int):
             sem_score = semantic_scores.get(student.student_id, 0.0)
             overall = combined_score(kw_score, sem_score)
 
-            if overall < MIN_MATCH_SCORE:
+            if overall < min_match_score:
                 continue
 
+            candidates.append({
+                "student_id"    : student.student_id,
+                "kw_score"      : kw_score,
+                "sem_score"     : sem_score,
+                "overall"       : overall,
+                "matched_skills": matched_skills,
+            })
+
+        # Sort by overall score descending, keep top_k only
+        candidates = sorted(candidates, key=lambda x: x["overall"], reverse=True)[:top_k]
+
+        # Save top_k matches to Neon
+        for c in candidates:
             save_job_match(
                 campaign_id=campaign_id,
                 job_id=job_analysis.job_id,
-                student_id=student.student_id,
-                keyword_match_score=kw_score,
-                semantic_match_score=sem_score,
-                overall_match_score=overall,
-                matched_skills=matched_skills,
+                student_id=c["student_id"],
+                keyword_match_score=c["kw_score"],
+                semantic_match_score=c["sem_score"],
+                overall_match_score=c["overall"],
+                matched_skills=c["matched_skills"],
             )
-
-            job_match_count += 1
             total_matches += 1
 
-        print(f"  -> {job_match_count} matches saved")
+        print(f"  -> {len(candidates)} matches saved")
 
     print(f"\nDone. Total matches saved: {total_matches}")
 
 
 if __name__ == "__main__":
-    run_targeting_agent(campaign_id=1)
+    run_targeting_agent(
+        campaign_id=1,
+        min_match_score=0.2,
+        experience_strict=False,
+        top_k=5,
+    )

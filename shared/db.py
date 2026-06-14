@@ -215,7 +215,7 @@ def get_job_analyses(campaign_id: int) -> list[JobAnalysis]:
         SELECT analysis_id, job_id, campaign_id, extracted_skills,
                experience_level, job_type, key_responsibilities,
                qualifications_summary, llm_model_used
-        FROM job_analysis_mock
+        FROM job_analysis
         WHERE campaign_id = %s
     """, (campaign_id,))
 
