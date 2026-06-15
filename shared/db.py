@@ -377,40 +377,39 @@ from psycopg2.extras import RealDictCursor
 
 def fetchone(query: str, params: tuple = ()):
     conn = get_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    cursor.execute(query, params)
-    row = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    return dict(row) if row else None
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(query, params)
+            row = cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
 
 
 def fetchall(query: str, params: tuple = ()):
     conn = get_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return [dict(row) for row in rows]
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
 
 
 def execute(query: str, params: tuple = ()):
     conn = get_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    cursor.execute(query, params)
-
-    row = None
     try:
-        row = cursor.fetchone()
-    except Exception:
-        row = None
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-    return dict(row) if row else None
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(query, params)
+            try:
+                row = cursor.fetchone()
+            except Exception:
+                row = None
+        conn.commit()
+        return dict(row) if row else None
+    finally:
+        conn.close()
 
 
 def get_company_targets_for_contact_discovery(campaign_id: int):
@@ -442,6 +441,8 @@ def get_cached_contact(company_name: str):
             confidence_score
         FROM contacts
         WHERE company_name = %s
+          AND contact_source != 'Human Input Required'
+          AND contact_email NOT LIKE 'NEEDED:%%'
         ORDER BY confidence_score DESC NULLS LAST, last_used_at DESC NULLS LAST
         LIMIT 1
     """
@@ -517,6 +518,21 @@ def touch_campaign(campaign_id: int):
         WHERE campaign_id = %s
     """
     execute(query, (campaign_id,))
+
+def flag_contact_needed(company_name: str, campaign_id: int) -> None:
+    query = """
+        INSERT INTO contacts (
+            company_name,
+            contact_email,
+            contact_source,
+            contact_verified,
+            confidence_score,
+            created_at
+        )
+        VALUES (%s, %s, 'Human Input Required', FALSE, 0.0, NOW())
+        ON CONFLICT (company_name, contact_email) DO NOTHING
+    """
+    execute(query, (company_name, f"NEEDED:{company_name}"))
 
 
 # ─────────────────────────────────────────────

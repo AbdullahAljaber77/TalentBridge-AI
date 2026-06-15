@@ -11,7 +11,7 @@ Parameters (all tunable):
 from sentence_transformers import SentenceTransformer
 
 from rag.student_embeddings import load_student_index, EMBED_MODEL
-from shared.db import get_job_analyses, get_all_students, get_job_posting, save_job_match
+from shared.db import get_job_analyses, get_all_students, get_job_posting, save_job_match, update_campaign_status
 
 # Load once at module level — not inside the function
 embed_model = SentenceTransformer(EMBED_MODEL)
@@ -112,6 +112,7 @@ def run_targeting_agent(
     students = get_all_students()
     faiss_index, faiss_metadata = load_student_index()
 
+    update_campaign_status(campaign_id, "matching students")
     print(f"Settings: min_match_score={min_match_score}, experience_strict={experience_strict}, top_k={top_k}")
 
     total_matches = 0
@@ -166,6 +167,8 @@ def run_targeting_agent(
 
         print(f"  -> {len(candidates)} matches saved")
 
+    update_campaign_status(campaign_id, "students matched")
+    
     print(f"\nDone. Total matches saved: {total_matches}")
     return {
         "status"        : "complete",

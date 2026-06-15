@@ -104,7 +104,9 @@ def run(campaign_id: int, limit: int = None) -> dict:
     jobs = db.get_jobs_for_campaign(keywords, date_from, campaign_id, limit=limit)
     total = len(jobs)
     total_batches = (total + BATCH_SIZE - 1) // BATCH_SIZE
- 
+    
+    db.update_campaign_status(campaign_id, "analyzing jobs")
+
     print(f"Campaign {campaign_id}: {total} jobs to analyze "
           f"in {total_batches} batches.")
  
@@ -166,6 +168,7 @@ def run(campaign_id: int, limit: int = None) -> dict:
             "failed": failed,
         }
 
+    db.update_campaign_status(campaign_id, "jobs analyzed")
     db.complete_campaign(campaign_id)
     print(f"Done. processed={processed} failed={failed}")
     return {
