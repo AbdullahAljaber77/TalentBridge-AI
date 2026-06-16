@@ -389,5 +389,5 @@ def contact_discovery_agent(campaign_id: int):
 
 
 if __name__ == "__main__":
-    output = contact_discovery_agent(campaign_id=1)
+    output = contact_discovery_agent(campaign_id=2)
     print(output)
