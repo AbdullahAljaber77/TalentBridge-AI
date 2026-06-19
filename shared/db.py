@@ -549,10 +549,115 @@ def flag_contact_needed(company_name: str, campaign_id: int) -> None:
 # Agent 05 — Email Strategy Agent
 # ─────────────────────────────────────────────
 
-# TODO: Abdullah will add functions here
-# Examples:
-#   save_email_strategy(...)
-#   get_email_strategy(...)
+# ==============================
+# Agent 05 — Email Strategy Agent
+# ==============================
+
+def get_companies_for_email_strategy(campaign_id: int):
+    query = """
+        SELECT DISTINCT jp.company_name
+        FROM job_matches jm
+        JOIN job_postings jp ON jm.job_id = jp.job_id
+        WHERE jm.campaign_id = %s
+        ORDER BY jp.company_name
+    """
+    return fetchall(query, (campaign_id,))
+
+
+def get_company_research(company_name: str):
+    query = """
+        SELECT
+            company_name,
+            research_summary,
+            company_type,
+            classification_confidence,
+            why_interested,
+            recent_news_hook,
+            last_updated
+        FROM company_research
+        WHERE company_name = %s
+        LIMIT 1
+    """
+    return fetchone(query, (company_name,))
+
+
+def get_job_matches_for_company(campaign_id: int, company_name: str):
+    query = """
+        SELECT
+            jm.match_id,
+            jm.campaign_id,
+            jm.job_id,
+            jm.student_id,
+            jm.keyword_match_score,
+            jm.semantic_match_score,
+            jm.overall_match_score,
+            jm.matched_skills,
+            jp.company_name,
+            jp.job_title,
+            jp.location
+        FROM job_matches jm
+        JOIN job_postings jp ON jm.job_id = jp.job_id
+        WHERE jm.campaign_id = %s
+        AND jp.company_name = %s
+        ORDER BY jm.overall_match_score DESC
+    """
+    return fetchall(query, (campaign_id, company_name))
+
+
+def save_email_strategy(
+    campaign_id: int,
+    company_name: str,
+    tone: str,
+    angle: str,
+    email_length: str,
+    call_to_action: str,
+    playbook_used: str
+):
+    query = """
+        INSERT INTO email_strategies (
+            campaign_id,
+            company_name,
+            tone,
+            angle,
+            email_length,
+            call_to_action,
+            playbook_used,
+            created_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+        ON CONFLICT (campaign_id, company_name)
+        DO UPDATE SET
+            tone = EXCLUDED.tone,
+            angle = EXCLUDED.angle,
+            email_length = EXCLUDED.email_length,
+            call_to_action = EXCLUDED.call_to_action,
+            playbook_used = EXCLUDED.playbook_used,
+            created_at = NOW()
+        RETURNING strategy_id
+    """
+
+    try:
+        return execute(query, (
+            campaign_id,
+            company_name,
+            tone,
+            angle,
+            email_length,
+            call_to_action,
+            playbook_used
+        ))
+    except Exception:
+        # fallback إذا جدولكم في Neon اسمه email_strategy بدون s
+        query = query.replace("email_strategies", "email_strategy")
+        return execute(query, (
+            campaign_id,
+            company_name,
+            tone,
+            angle,
+            email_length,
+            call_to_action,
+            playbook_used
+        ))
 
 
 # ─────────────────────────────────────────────
@@ -569,11 +674,129 @@ def flag_contact_needed(company_name: str, campaign_id: int) -> None:
 # Agent 07 — Campaign Execution Agent
 # ─────────────────────────────────────────────
 
-# TODO: Abdullah will add functions here
-# Examples:
-#   get_approved_emails(...)
-#   mark_email_sent(...)
+def get_pending_emails(campaign_id: int):
+    query = """
+        SELECT
+            e.email_id,
+            e.campaign_id,
+            e.email_type,
+            e.recipient_email,
+            e.recipient_name,
+            e.subject,
+            e.body,
+            e.company_name,
+            e.student_id,
+            e.contact_id,
+            e.contact_verified,
+            e.status,
+            c.contact_source
+        FROM emails e
+        LEFT JOIN contacts c ON e.contact_id = c.contact_id
+        WHERE e.campaign_id = %s
+        AND e.status = 'Pending Approval'
+        ORDER BY
+            CASE
+                WHEN e.email_type = 'Employer Outreach' THEN 1
+                WHEN e.email_type = 'Student Notification' THEN 2
+                WHEN e.email_type = 'Follow-up' THEN 3
+                WHEN e.email_type = 'Scheduling' THEN 4
+                ELSE 5
+            END,
+            e.company_name ASC NULLS LAST,
+            e.created_at ASC
+    """
+    return fetchall(query, (campaign_id,))
 
+
+def get_email_by_id(email_id: int):
+    query = """
+        SELECT *
+        FROM emails
+        WHERE email_id = %s
+        LIMIT 1
+    """
+    return fetchone(query, (email_id,))
+
+
+def approve_email(email_id: int, approved_by: str = "Human Reviewer"):
+    query = """
+        UPDATE emails
+        SET status = 'Approved',
+            approved_by = %s,
+            approved_at = NOW()
+        WHERE email_id = %s
+        RETURNING email_id, status
+    """
+    return execute(query, (approved_by, email_id))
+
+
+def reject_email(email_id: int, rejection_reason: str):
+    query = """
+        UPDATE emails
+        SET status = 'Rejected',
+            rejection_reason = %s
+        WHERE email_id = %s
+        RETURNING email_id, status, rejection_reason
+    """
+    return execute(query, (rejection_reason, email_id))
+
+
+def update_email_content(email_id: int, subject: str, body: str):
+    query = """
+        UPDATE emails
+        SET subject = %s,
+            body = %s,
+            status = 'Pending Approval'
+        WHERE email_id = %s
+        RETURNING email_id, subject, body, status
+    """
+    return execute(query, (subject, body, email_id))
+
+
+def mark_email_sent(email_id: int):
+    query = """
+        UPDATE emails
+        SET status = 'Sent',
+            sent_at = NOW(),
+            tracking_headers = jsonb_build_object(
+                'X-TalentBridge-Campaign-ID', campaign_id::TEXT,
+                'X-TalentBridge-Email-ID', email_id::TEXT
+            )
+        WHERE email_id = %s
+        RETURNING email_id, status, sent_at
+    """
+    return execute(query, (email_id,))
+
+
+def mark_email_failed(email_id: int, error_message: str = None):
+    query = """
+        UPDATE emails
+        SET status = 'Failed',
+            rejection_reason = COALESCE(%s, rejection_reason)
+        WHERE email_id = %s
+        RETURNING email_id, status
+    """
+    return execute(query, (error_message, email_id))
+
+
+def increment_emails_approved(campaign_id: int):
+    query = """
+        UPDATE campaigns
+        SET emails_approved = COALESCE(emails_approved, 0) + 1,
+            last_updated = NOW()
+        WHERE campaign_id = %s
+    """
+    execute(query, (campaign_id,))
+
+
+def increment_emails_sent(campaign_id: int):
+    query = """
+        UPDATE campaigns
+        SET emails_sent = COALESCE(emails_sent, 0) + 1,
+            last_updated = NOW()
+        WHERE campaign_id = %s
+    """
+    execute(query, (campaign_id,))
 
 # ─────────────────────────────────────────────
 # Agent 08 — Inbox Monitoring Agent
