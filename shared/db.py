@@ -549,10 +549,6 @@ def flag_contact_needed(company_name: str, campaign_id: int) -> None:
 # Agent 05 — Email Strategy Agent
 # ─────────────────────────────────────────────
 
-# ==============================
-# Agent 05 — Email Strategy Agent
-# ==============================
-
 def get_companies_for_email_strategy(campaign_id: int):
     query = """
         SELECT DISTINCT jp.company_name
@@ -614,7 +610,7 @@ def save_email_strategy(
     playbook_used: str
 ):
     query = """
-        INSERT INTO email_strategies (
+        INSERT INTO email_strategy (
             campaign_id,
             company_name,
             tone,
@@ -635,39 +631,48 @@ def save_email_strategy(
             created_at = NOW()
         RETURNING strategy_id
     """
-
-    try:
-        return execute(query, (
-            campaign_id,
-            company_name,
-            tone,
-            angle,
-            email_length,
-            call_to_action,
-            playbook_used
-        ))
-    except Exception:
-        # fallback إذا جدولكم في Neon اسمه email_strategy بدون s
-        query = query.replace("email_strategies", "email_strategy")
-        return execute(query, (
-            campaign_id,
-            company_name,
-            tone,
-            angle,
-            email_length,
-            call_to_action,
-            playbook_used
-        ))
+    return execute(query, (
+        campaign_id,
+        company_name,
+        tone,
+        angle,
+        email_length,
+        call_to_action,
+        playbook_used,
+    ))
 
 
 # ─────────────────────────────────────────────
 # Agent 06 — Email Generation Agent
 # ─────────────────────────────────────────────
 
-# TODO: Abdulmohsen will add functions here
-# Examples:
-#   save_email(...)
-#   get_pending_emails(...)
+def get_email_strategy(campaign_id: int, company_name: str):
+    """
+    One email strategy row for a company in a campaign (Agent 05 output).
+    Reads the live singular table `email_strategy`.
+    """
+    query = """
+        SELECT strategy_id, campaign_id, company_name, tone, angle,
+               email_length, call_to_action, playbook_used
+        FROM email_strategy
+        WHERE campaign_id = %s AND company_name = %s
+        ORDER BY strategy_id DESC
+        LIMIT 1
+    """
+    return fetchone(query, (campaign_id, company_name))
+
+def get_students_by_ids(student_ids: list[int]):
+    """Bulk-fetch student profiles for a list of IDs. Returns list of dicts."""
+    if not student_ids:
+        return []
+    query = """
+        SELECT student_id, full_name, email, skills, experience_years,
+               location, field, status, summary, available_to_start, linkedin_url
+        FROM student_profiles
+        WHERE student_id = ANY(%s)
+        ORDER BY student_id
+    """
+    return fetchall(query, (student_ids,))
 
 
 # ─────────────────────────────────────────────
