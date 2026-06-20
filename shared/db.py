@@ -312,7 +312,7 @@ def get_job_posting(job_id: int) -> JobPosting:
 
     cursor.execute("""
         SELECT job_id, company_name, job_title, description_text,
-               location, country
+               location, country, company_rating, company_link, apply_link, url
         FROM job_postings
         WHERE job_id = %s
     """, (job_id,))
@@ -331,6 +331,10 @@ def get_job_posting(job_id: int) -> JobPosting:
         description_text = row[3],
         location         = row[4],
         country          = row[5],
+        company_rating   = row[6],
+        company_link     = row[7],
+        apply_link       = row[8],
+        url              = row[9],
     )
 
 
