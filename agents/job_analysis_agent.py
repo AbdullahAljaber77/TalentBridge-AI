@@ -31,7 +31,6 @@ REQUIRED_FIELDS = [
     "qualifications_summary",
 ]
  
-# System prompt is built once and reused for every job.
 SYSTEM_PROMPT = build_system_prompt(
     role="job description analyst",
     instructions=(
@@ -40,7 +39,6 @@ SYSTEM_PROMPT = build_system_prompt(
     ),
 )
  
-# Extraction rules sent with every job (kept out of the data dict).
 INSTRUCTION = (
     "Analyze this job posting and extract the required fields. "
     "Return JSON with exactly these keys: extracted_skills (list), "
@@ -100,7 +98,6 @@ def run(campaign_id: int, limit: int = None) -> dict:
     date_from = campaign["date_range_start"]
  
     # STEP 2 — Filter jobs (skips already-analysed jobs, so restart is safe).
-    # Pass limit=5 for a cheap first test run; leave None for a full run.
     jobs = db.get_jobs_for_campaign(keywords, date_from, campaign_id, limit=limit)
     total = len(jobs)
     total_batches = (total + BATCH_SIZE - 1) // BATCH_SIZE

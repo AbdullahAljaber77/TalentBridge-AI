@@ -211,7 +211,6 @@ CREATE TABLE company_research (
     why_interested            TEXT,
     recent_news_hook          TEXT,
     -- one sentence recent news for email opener — NULL if no news found
-    researched_at             TIMESTAMP DEFAULT NOW(),
     last_updated              TIMESTAMP DEFAULT NOW()
 );
 ```

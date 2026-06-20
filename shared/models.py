@@ -168,7 +168,7 @@ class Contact:
 
 
 # ─────────────────────────────────────────────
-# Company Research
+# Company Research      *added last_updated*
 # ─────────────────────────────────────────────
 
 @dataclass
@@ -180,6 +180,7 @@ class CompanyResearch:
     classification_confidence: str     # High | Medium | Low
     why_interested:            Optional[str] = None
     recent_news_hook:          Optional[str] = None
+    last_updated:              Optional[datetime] = None
 
 
 # ─────────────────────────────────────────────
