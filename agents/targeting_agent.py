@@ -121,8 +121,9 @@ def run_targeting_agent(
         job_posting = get_job_posting(job_analysis.job_id)
         print(f"\nProcessing: {job_posting.job_title} at {job_posting.company_name}")
 
+        job_query = job_analysis.qualifications_summary or job_posting.description_text
         semantic_scores = semantic_match(
-            job_posting.description_text, faiss_index, faiss_metadata, embed_model
+            job_query, faiss_index, faiss_metadata, embed_model
         )
 
         # Collect all passing matches for this job
@@ -171,7 +172,7 @@ def run_targeting_agent(
     
     print(f"\nDone. Total matches saved: {total_matches}")
     return {
-        "status"        : "complete",
+        "status"        : "students matched",
         "campaign_id"   : campaign_id,
         "total_matches" : total_matches,
     }

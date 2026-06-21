@@ -43,20 +43,20 @@ REQUIRED_FIELDS = [
 SYSTEM_PROMPT = build_system_prompt(
     role="business research analyst",
     instructions=(
-        "Analyze web search results about a company and produce structured "
-        "intelligence for an employer outreach campaign. "
-        "Always respond with valid JSON only — no markdown, no explanation.\n"
-        "Company type definitions:\n"
-        "- Large Enterprise: 1000+ employees, established brand\n"
-        "- Tech Startup: early stage, under 5 years old, under 200 employees, "
-        "venture backed and still in growth/funding phase\n"
+        "Company type definitions (weigh the actual evidence in the search "
+        "results — revenue, user base, employee count, market position, "
+        "acquisitions — not just employee count, which is often unknown):\n"
+        "- Large Enterprise: established company operating at large scale — "
+        "1000+ employees OR major market presence such as high revenue, a large "
+        "user/customer base, market leadership, or acquiring other companies\n"
+        "- Tech Startup: early-stage tech company, roughly under 5 years old or "
+        "still in its growth/funding phase and not yet market-dominant\n"
         "- Government: government or semi-government entity (e.g. Aramco, STC)\n"
         "- Consulting: professional services / advisory firm\n"
-        "- SME: small to medium business under 1000 employees — includes grown "
-        "startups that have scaled beyond early stage (e.g. 5+ years old, "
-        "large user base, or significant revenue)\n"
-        "Only include a recent_news_hook if the news is from the last 6 months; "
-        "otherwise return null. Search results may be in Arabic — that is fine."
+        "- SME: genuinely small-to-medium business with modest scale — limited "
+        "revenue and user base, not a market leader. A company with very large "
+        "revenue, a large user base, or that acquires other firms is NOT an SME, "
+        "even if its employee count is unknown.\n"
     ),
 )
 
@@ -257,10 +257,10 @@ def research_agent(campaign_id: int) -> dict:
         print(f"   • {company_name} — {result['status']}")
         db.touch_campaign(campaign_id)
 
-    db.update_campaign_status(campaign_id, "companies_researched")
+    db.update_campaign_status(campaign_id, "companies researched")
 
     return {
-        "status":              "complete",
+        "status":              "companies researched",
         "campaign_id":         campaign_id,
         "companies_processed": len(results),
         "results":             results,

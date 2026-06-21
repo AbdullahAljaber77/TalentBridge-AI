@@ -20,6 +20,35 @@ from shared.models import JobAnalysis, Student, JobPosting
 def get_connection():
     return psycopg2.connect(DATABASE_URL)
 
+def create_campaign(
+    campaign_name: str,
+    selected_keywords: list[str],
+    date_range_start,          # 'YYYY-MM-DD' or date
+    date_range_end,            # 'YYYY-MM-DD' or date
+    campaign_end_date=None,    # optional
+    followup_days: int = 3,
+    inbox_check_minutes: int = 5,
+) -> int:
+    """
+    Create a new campaign row and return its campaign_id.
+    Status starts at 'pending'. The UI's Launch button calls this.
+    """
+    query = """
+        INSERT INTO campaigns (
+            campaign_name, selected_keywords,
+            date_range_start, date_range_end, campaign_end_date,
+            followup_days, inbox_check_minutes
+        )
+        VALUES (%s, %s::text[], %s, %s, %s, %s, %s)
+        RETURNING campaign_id
+    """
+    row = execute(query, (
+        campaign_name, selected_keywords,
+        date_range_start, date_range_end, campaign_end_date,
+        followup_days, inbox_check_minutes,
+    ))
+    return row["campaign_id"] if row else None
+
 
 # ─────────────────────────────────────────────
 # Agent 01 — Job Analysis Agent

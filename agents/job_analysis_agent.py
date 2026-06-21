@@ -53,7 +53,12 @@ INSTRUCTION = (
     "  Do NOT add years, parentheses, or any other text\n"
     "- job_type: Full-time | Part-time | Remote | Hybrid | Not specified\n"
     "- key_responsibilities: maximum 5 most important\n"
-    "- qualifications_summary: one sentence"
+    "- qualifications_summary: 2-3 sentences, technical and specific. "
+    "Lead with the role's core technical domain and name it explicitly "
+    "(e.g. machine learning, computer vision, power systems engineering, "
+    "occupational safety, sales engineering). Then state the concrete tools, "
+    "technologies, methods, or systems the role requires. Avoid generic filler "
+    "like 'a relevant degree' or 'good communication skills' unless genuinely central."
 )
  
  
@@ -111,8 +116,8 @@ def run(campaign_id: int, limit: int = None) -> dict:
                       total_batches=total_batches)
  
     if total == 0:
-        db.complete_campaign(campaign_id)
-        return {"status": "complete", "campaign_id": campaign_id,
+        db.update_campaign_status(campaign_id, "jobs analyzed")
+        return {"status": "jobs analyzed", "campaign_id": campaign_id,
                 "processed": 0, "failed": 0}
  
     processed = 0
@@ -166,10 +171,9 @@ def run(campaign_id: int, limit: int = None) -> dict:
         }
 
     db.update_campaign_status(campaign_id, "jobs analyzed")
-    db.complete_campaign(campaign_id)
     print(f"Done. processed={processed} failed={failed}")
     return {
-        "status": "complete",
+        "status": "jobs analyzed",
         "campaign_id": campaign_id,
         "processed": processed,
         "failed": failed,

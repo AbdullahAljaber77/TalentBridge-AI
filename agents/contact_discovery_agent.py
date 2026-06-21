@@ -67,7 +67,7 @@ def tavily_search(query: str):
 
 def extract_email_from_text(text: str) -> Optional[str]:
     pattern = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
-    emails = re.findall(pattern, text)
+    emails = [e.rstrip(".") for e in re.findall(pattern, text)]
 
     if not emails:
         return None
@@ -378,10 +378,10 @@ def contact_discovery_agent(campaign_id: int):
         results.append(result)
         db.touch_campaign(campaign_id)
 
-    db.update_campaign_status(campaign_id, "contacts_discovered")
+    db.update_campaign_status(campaign_id, "contacts discovered")
 
     return {
-        "status": "complete",
+        "status": "contacts discovered",
         "campaign_id": campaign_id,
         "companies_processed": len(companies),
         "results": results
