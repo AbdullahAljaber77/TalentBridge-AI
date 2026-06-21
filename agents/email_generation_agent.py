@@ -11,8 +11,8 @@ JUNK_URL_VALUES = {"", "-", "n/a", "na", "none", "null", "not found",
 
 LENGTH_GUIDANCE = {
     "Short":  "about 60-100 words",
-    "Medium": "about 110-170 words",
-    "Long":   "about 180-260 words",
+    "Medium": "about 110-150 words",
+    "Long":   "about 160-200 words",
 }
 
 EMPLOYER_SYSTEM = build_system_prompt(
@@ -31,7 +31,10 @@ EMPLOYER_SYSTEM = build_system_prompt(
         "- Reference the matched candidates concretely (the roles they fit and 2-3 key "
         "skills), but summarize naturally — do NOT paste a raw list.\n"
         "- Match the requested tone and the length_guidance.\n"
-        "- End with the exact call_to_action provided.\n"
+        "- Close by inviting the reader to take the action described in "
+        "call_to_action, phrased naturally as part of a sentence (e.g. 'Would you "
+        "be open to a 15-minute introductory call?'). Convey that exact action, but "
+        "do NOT paste the call_to_action text verbatim as a standalone line or label.\n"
         "- Close with a brief professional sign-off (e.g. 'Best regards').\n"
         "- Be precise per candidate: experience level and skills differ between "
         "candidates. Never state a single experience range as if it applies to all of "
@@ -374,6 +377,7 @@ def email_generation_agent(campaign_id: int) -> dict:
             continue
 
     summary["total"] = summary["employer_emails"] + summary["student_emails"]
-    update_campaign_progress(campaign_id, "emails_generated",
+    update_campaign_progress(campaign_id, "emails generated",
                              emails_generated=summary["total"])
+    summary["status"] = "emails generated"
     return summary

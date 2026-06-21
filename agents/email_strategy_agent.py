@@ -358,10 +358,10 @@ def email_strategy_agent(campaign_id: int) -> Dict[str, Any]:
         results.append(result)
         db.touch_campaign(campaign_id)
 
-    db.update_campaign_status(campaign_id, "email_strategies_ready")
+    db.update_campaign_status(campaign_id, "email strategies ready")
 
     return {
-        "status": "complete",
+        "status": "email strategies ready",
         "campaign_id": campaign_id,
         "companies_processed": len(companies),
         "results": results
