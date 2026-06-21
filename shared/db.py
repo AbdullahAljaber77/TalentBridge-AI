@@ -741,6 +741,61 @@ def get_students_by_ids(student_ids: list[int]):
     """
     return fetchall(query, (student_ids,))
 
+def save_email(email: dict) -> int:
+    """
+    Insert one generated email into the emails table as 'Pending Approval'.
+    Accepts the record produced by Agent 06's generators (the non-column
+    'validation' key is ignored). Returns the new email_id.
+    Leaves rejection_reason / approved_by / approved_at / sent_at NULL — Agent 07 sets those.
+    """
+    query = """
+        INSERT INTO emails (
+            campaign_id, email_type, recipient_email, recipient_name,
+            subject, body, company_name, student_id, contact_id,
+            contact_verified, status, created_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        RETURNING email_id
+    """
+    params = (
+        email.get("campaign_id"),
+        email.get("email_type"),
+        email.get("recipient_email"),
+        email.get("recipient_name"),
+        email.get("subject"),
+        email.get("body"),
+        email.get("company_name"),
+        email.get("student_id"),
+        email.get("contact_id"),
+        email.get("contact_verified"),
+        "Pending Approval",                 # status — always this on insert
+    )
+    row = execute(query, params)
+    return row["email_id"] if row else None
+
+def update_campaign_progress(campaign_id: int, status: str,
+                             emails_generated: int = None):
+    """
+    Update a campaign's status during Agent 06's run, always bumping last_updated.
+    Pass emails_generated to also record the count (used at the end of the run).
+    Does NOT touch completed_at — Agent 06 is one step, not campaign completion.
+    """
+    if emails_generated is None:
+        query = """
+            UPDATE campaigns
+            SET status = %s, last_updated = NOW()
+            WHERE campaign_id = %s
+            RETURNING campaign_id, status, emails_generated
+        """
+        return execute(query, (status, campaign_id))
+
+    query = """
+        UPDATE campaigns
+        SET status = %s, emails_generated = %s, last_updated = NOW()
+        WHERE campaign_id = %s
+        RETURNING campaign_id, status, emails_generated
+    """
+    return execute(query, (status, emails_generated, campaign_id))
 
 # ─────────────────────────────────────────────
 # Agent 07 — Campaign Execution Agent

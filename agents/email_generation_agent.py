@@ -1,4 +1,10 @@
 from shared.llm import call_llm_with_data, build_system_prompt
+from shared.db import (
+    get_company_targets_for_contact_discovery,
+    get_email_strategy, get_company_research, get_cached_contact,
+    get_job_matches_for_company, get_students_by_ids, get_job_posting,
+    save_email, update_campaign_progress,
+)
 
 JUNK_URL_VALUES = {"", "-", "n/a", "na", "none", "null", "not found",
                    "not available", "tbd", "pending"}
@@ -31,7 +37,36 @@ EMPLOYER_SYSTEM = build_system_prompt(
         "candidates. Never state a single experience range as if it applies to all of "
         "them. Either attribute experience to each candidate individually, or omit "
         "experience entirely — never generalize it.\n"
+        "- The matched_candidates list may include the same person more than once when "
+        "they fit multiple roles. Use candidate_count (distinct people) for any headline "
+        "number — never imply there are more people than candidate_count. When a person "
+        "appears for multiple roles, you may mention their roles together rather than "
+        "repeating their full profile.\n"
         "- Use only facts present in the data. Never output placeholders like [Name] or [Company].\n"
+        "Return JSON with exactly two keys: 'subject' and 'body'."
+    ),
+)
+
+STUDENT_SYSTEM = build_system_prompt(
+    role="career advisor writing to a bootcamp graduate",
+    instructions=(
+        "Write a warm, encouraging email notifying a graduate that they have been "
+        "matched to a specific job opening. Keep it personal and motivating, not corporate.\n"
+        "Rules:\n"
+        "- Greet the student by first name (e.g. 'Hi Ahmed,').\n"
+        "- Share the good news: they matched with the company (company_name) for the "
+        "role (job_title).\n"
+        "- Briefly say why they're a good fit, referencing 2-3 of their relevant skills "
+        "and their field. Be genuine, not flattering.\n"
+        "- Include the job details that are present: role title and location. Mention "
+        "company_rating ONLY if it is provided and not null; if it is null, do not "
+        "mention any rating at all.\n"
+        "- Application link: if application_link is provided, include it clearly as where "
+        "to apply. If application_link is null, do NOT invent a link — instead encourage "
+        "the student to search for the company's careers page and look for the role there.\n"
+        "- Keep it concise (about 90-140 words).\n"
+        "- Close warmly and sign off as 'The WeCloudData Team'.\n"
+        "- Use only facts present in the data. Never output placeholders like [Name].\n"
         "Return JSON with exactly two keys: 'subject' and 'body'."
     ),
 )
@@ -132,16 +167,19 @@ def validate_email(email: dict) -> dict:
     return {"valid": len(errors) == 0, "errors": errors, "warnings": warnings}
 
 def _build_employer_roster(matches: list[dict], students: list[dict]) -> list[dict]:
-    """Join matches->students, one entry per student at their best-scoring role."""
+    """
+    One entry per (student, job) match, so every job posting a company has is
+    represented. A student who matched multiple roles appears once per role.
+    """
     by_id = {s["student_id"]: s for s in students}
     roster, seen = [], set()
     for m in matches:                       # matches arrive ordered by score desc
-        sid = m["student_id"]
-        if sid in seen:
+        key = (m["student_id"], m.get("job_id"))
+        if key in seen:                     # guard against duplicate match rows
             continue
-        seen.add(sid)
-        s = by_id.get(sid, {})
-        skills = m.get("matched_skills") or s.get("skills") or []   # fall back to student's skills
+        seen.add(key)
+        s = by_id.get(m["student_id"], {})
+        skills = m.get("matched_skills") or s.get("skills") or []
         roster.append({
             "name": s.get("full_name", "A candidate"),
             "field": s.get("field"),
@@ -163,6 +201,7 @@ def generate_employer_email(campaign_id: int, company_name: str, strategy: dict,
     contact = contact or {}          # no contact yet -> still generate the email
 
     roster = _build_employer_roster(matches, students)
+    unique_people = len({m["student_id"] for m in matches})
 
     data = {
         "company_name":       company_name,
@@ -176,7 +215,8 @@ def generate_employer_email(campaign_id: int, company_name: str, strategy: dict,
         "angle":              strategy.get("angle"),
         "length_guidance":    LENGTH_GUIDANCE.get(strategy.get("email_length"), LENGTH_GUIDANCE["Medium"]),
         "call_to_action":     strategy.get("call_to_action"),
-        "candidate_count":    len(roster),
+        "candidate_count":    unique_people,
+        "opportunity_count":  len(roster),
         "matched_candidates": roster,
     }
 
@@ -213,3 +253,127 @@ def generate_employer_email(campaign_id: int, company_name: str, strategy: dict,
 
     email["validation"] = check
     return email
+
+def generate_student_email(campaign_id: int, company_name: str, match: dict,
+                           student: dict, job, research: dict = None) -> dict:
+    """
+    One notification email to a student about a specific matched job posting.
+    Resolves the apply link and omits the rating line when rating is null.
+    """
+    link_info = resolve_application_link(job) if job else {"link": None, "source": "Not Available"}
+    skills = match.get("matched_skills") or student.get("skills") or []
+    fn = (student.get("full_name") or "").strip()
+    first = fn.split()[0] if fn else "there"
+
+    data = {
+        "company_name":       company_name,
+        "company_blurb":      (research or {}).get("research_summary"),
+        "student_first_name": first,
+        "student_full_name":  student.get("full_name"),
+        "student_field":      student.get("field"),
+        "student_skills":     skills,
+        "student_experience": student.get("experience_years"),
+        "available_to_start": student.get("available_to_start"),
+        "job_title":          match.get("job_title") or (job.job_title if job else None),
+        "job_location":       (job.location if job else None),
+        "company_rating":     float(job.company_rating) if (job and job.company_rating is not None) else None,
+        "application_link":   link_info["link"],                        # None -> follow-up
+        "application_source": link_info["source"],
+    }
+
+    instruction = "Write a personalized job-match notification email to this graduate."
+    result = call_llm_with_data(
+        instruction=instruction, data=data,
+        system=STUDENT_SYSTEM, required_keys=["subject", "body"],
+    )
+
+    email = {
+        "campaign_id":      campaign_id,
+        "email_type":       "Student Notification",
+        "company_name":     company_name,
+        "recipient_email":  student.get("email"),
+        "recipient_name":   student.get("full_name"),
+        "contact_id":       None,
+        "student_id":       student.get("student_id"),
+        "contact_verified": None,
+        "subject":          (result.get("subject") or "").strip(),
+        "body":             (result.get("body") or "").strip(),
+    }
+
+    check = validate_email(email)
+    if not check["valid"]:
+        result = call_llm_with_data(
+            instruction=instruction + f"\n\nThe previous draft failed validation: "
+                        f"{check['errors']}. Fix these and ensure a non-empty subject and "
+                        f"a body of at least a few sentences.",
+            data=data, system=STUDENT_SYSTEM, required_keys=["subject", "body"],
+        )
+        email["subject"] = (result.get("subject") or "").strip()
+        email["body"]    = (result.get("body") or "").strip()
+        check = validate_email(email)
+
+    email["validation"] = check
+    return email
+
+def email_generation_agent(campaign_id: int) -> dict:
+    """
+    Agent 06 orchestrator. For each company with student matches in this campaign,
+    generate one employer outreach email plus one student notification per match,
+    save them all as 'Pending Approval', and report a summary.
+
+    One company failing does not stop the run — its error is logged and the rest proceed.
+    """
+    update_campaign_progress(campaign_id, "generating emails")
+
+    companies = get_company_targets_for_contact_discovery(campaign_id)
+
+    summary = {
+        "campaign_id": campaign_id,
+        "companies": 0,
+        "employer_emails": 0,
+        "student_emails": 0,
+        "total": 0,
+        "errors": [],
+    }
+
+    for row in companies:
+        company = row["company_name"]
+        summary["companies"] += 1
+        try:
+            strategy = get_email_strategy(campaign_id, company)
+            research = get_company_research(company)
+            contact  = get_cached_contact(company)
+
+            matches  = get_job_matches_for_company(campaign_id, company)
+            students = get_students_by_ids([m["student_id"] for m in matches])
+            students_by_id = {s["student_id"]: s for s in students}
+
+            # 1 employer email for the whole company
+            employer = generate_employer_email(
+                campaign_id, company, strategy, research, contact,
+                matches, list(students_by_id.values()),
+            )
+            save_email(employer)
+            summary["employer_emails"] += 1
+
+            # 1 student email per match (per job posting)
+            for m in matches:
+                student = students_by_id.get(m["student_id"])
+                if not student:
+                    summary["errors"].append(f"{company}: no profile for student {m['student_id']}")
+                    continue
+                job = get_job_posting(m["job_id"])
+                student_email = generate_student_email(
+                    campaign_id, company, m, student, job, research,
+                )
+                save_email(student_email)
+                summary["student_emails"] += 1
+
+        except Exception as e:
+            summary["errors"].append(f"{company}: {type(e).__name__}: {e}")
+            continue
+
+    summary["total"] = summary["employer_emails"] + summary["student_emails"]
+    update_campaign_progress(campaign_id, "emails_generated",
+                             emails_generated=summary["total"])
+    return summary
