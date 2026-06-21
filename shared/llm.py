@@ -347,9 +347,9 @@ def build_system_prompt(role: str, instructions: str) -> str:
         )
     """
     return (
-        f"You are an expert {role} working for TalentBridge AI, "
-        f"an employer outreach platform for a training academy in Saudi Arabia. "
-        f"You help connect talented graduates with employers across the Kingdom.\n\n"
+        f"You are an expert {role} working for WeCloudData, "
+        f"a data and AI bootcamp that connects its graduates with employers. "
+        f"You help connect talented graduates with companies that are hiring..\n\n"
         f"{instructions}\n\n"
         f"Always be precise, professional, and grounded in the data provided."
     )

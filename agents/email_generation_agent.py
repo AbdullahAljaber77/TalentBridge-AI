@@ -27,6 +27,10 @@ EMPLOYER_SYSTEM = build_system_prompt(
         "- Match the requested tone and the length_guidance.\n"
         "- End with the exact call_to_action provided.\n"
         "- Close with a brief professional sign-off (e.g. 'Best regards').\n"
+        "- Be precise per candidate: experience level and skills differ between "
+        "candidates. Never state a single experience range as if it applies to all of "
+        "them. Either attribute experience to each candidate individually, or omit "
+        "experience entirely — never generalize it.\n"
         "- Use only facts present in the data. Never output placeholders like [Name] or [Company].\n"
         "Return JSON with exactly two keys: 'subject' and 'body'."
     ),
@@ -149,14 +153,14 @@ def _build_employer_roster(matches: list[dict], students: list[dict]) -> list[di
 
 
 def generate_employer_email(campaign_id: int, company_name: str, strategy: dict,
-                            research: dict, contact: dict,
-                            matches: list[dict], students: list[dict]) -> dict | None:
+                            research: dict, contact: dict | None,
+                            matches: list[dict], students: list[dict]) -> dict:
     """
     One employer-outreach email pitching the matched cohort to the HR contact.
-    Returns a ready-to-save email record, or None if there is no real contact.
+    Always returns an email record. If no contact exists yet, the recipient is a
+    'NEEDED:{company}' placeholder so a human can fill it before sending.
     """
-    if not contact:
-        return None
+    contact = contact or {}          # no contact yet -> still generate the email
 
     roster = _build_employer_roster(matches, students)
 
@@ -186,7 +190,7 @@ def generate_employer_email(campaign_id: int, company_name: str, strategy: dict,
         "campaign_id":      campaign_id,
         "email_type":       "Employer Outreach",
         "company_name":     company_name,
-        "recipient_email":  contact.get("contact_email"),
+        "recipient_email":  contact.get("contact_email") or f"NEEDED:{company_name}",
         "recipient_name":   contact.get("contact_name"),
         "contact_id":       contact.get("contact_id"),
         "student_id":       None,
@@ -196,7 +200,7 @@ def generate_employer_email(campaign_id: int, company_name: str, strategy: dict,
     }
 
     check = validate_email(email)
-    if not check["valid"]:          # one regeneration with the errors fed back
+    if not check["valid"]:
         result = call_llm_with_data(
             instruction=instruction + f"\n\nThe previous draft failed validation: "
                         f"{check['errors']}. Fix these and ensure a non-empty subject "
