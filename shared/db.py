@@ -543,10 +543,73 @@ def flag_contact_needed(company_name: str, campaign_id: int) -> None:
 # Agent 04 — Research Agent
 # ─────────────────────────────────────────────
 
-# TODO: Osama will add functions here
-# Examples:
-#   save_company_research(...)
-#   get_company_research(...)
+
+def get_companies_for_research(campaign_id: int):
+
+    query = """
+        SELECT DISTINCT jp.company_name
+        FROM job_matches jm
+        JOIN job_postings jp ON jm.job_id = jp.job_id
+        WHERE jm.campaign_id = %s
+        ORDER BY jp.company_name
+    """
+    return fetchall(query, (campaign_id,))
+ 
+ 
+def get_research_by_company(company_name: str):    
+    query = """
+        SELECT
+            research_id,
+            company_name,
+            research_summary,
+            company_type,
+            classification_confidence,
+            why_interested,
+            recent_news_hook,
+            last_updated
+        FROM company_research
+        WHERE company_name = %s
+    """
+    return fetchone(query, (company_name,))
+ 
+ 
+def save_company_research(
+    company_name: str,
+    research_summary: str,
+    company_type: str,
+    classification_confidence: str,
+    why_interested=None,
+    recent_news_hook=None,
+):
+    query = """
+        INSERT INTO company_research (
+            company_name,
+            research_summary,
+            company_type,
+            classification_confidence,
+            why_interested,
+            recent_news_hook,
+            last_updated
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        ON CONFLICT (company_name)
+        DO UPDATE SET
+            research_summary          = EXCLUDED.research_summary,
+            company_type              = EXCLUDED.company_type,
+            classification_confidence = EXCLUDED.classification_confidence,
+            why_interested            = EXCLUDED.why_interested,
+            recent_news_hook          = EXCLUDED.recent_news_hook,
+            last_updated              = NOW()
+        RETURNING research_id
+    """
+    return execute(query, (
+        company_name,
+        research_summary,
+        company_type,
+        classification_confidence,
+        why_interested,
+        recent_news_hook,
+    ))
 
 
 # ─────────────────────────────────────────────
