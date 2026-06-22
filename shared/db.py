@@ -968,19 +968,204 @@ def increment_emails_sent(campaign_id: int):
 # Agent 09 — Response Classification Agent
 # ─────────────────────────────────────────────
 
-# TODO: Abdulmohsen will add functions here
-# Examples:
-#   update_reply_classification(...)
+def get_reply_by_id(reply_id: int):
+    query = """
+        SELECT
+            reply_id,
+            email_id,
+            campaign_id,
+            company_name,
+            reply_from,
+            reply_subject,
+            reply_body,
+            classification,
+            received_at
+        FROM replies
+        WHERE reply_id = %s
+        LIMIT 1
+    """
+    return fetchone(query, (reply_id,))
+
+
+def get_original_email(email_id: int):
+    query = """
+        SELECT
+            email_id,
+            campaign_id,
+            email_type,
+            recipient_email,
+            recipient_name,
+            subject,
+            body,
+            company_name,
+            status,
+            sent_at
+        FROM emails
+        WHERE email_id = %s
+        LIMIT 1
+    """
+    return fetchone(query, (email_id,))
+
+
+def save_reply_classification(
+    reply_id: int,
+    classification: str,
+    confidence: float,
+    llm_model_used: str = None
+):
+    query = """
+        UPDATE replies
+        SET classification = %s,
+            classified_at = NOW(),
+            llm_model_used = %s
+        WHERE reply_id = %s
+        RETURNING reply_id, classification, classified_at
+    """
+    return execute(query, (classification, llm_model_used, reply_id))
+
+
+def mark_company_closed(campaign_id: int, company_name: str):
+    # MVP: لا يوجد جدول company_status حالياً، فنكتفي بتحديث last_updated
+    query = """
+        UPDATE campaigns
+        SET last_updated = NOW()
+        WHERE campaign_id = %s
+        RETURNING campaign_id, status
+    """
+    return execute(query, (campaign_id,))
+
+
+def flag_reply_for_human_review(reply_id: int):
+    # MVP: نخلي classification = Undecided، والداشبورد يقرأها كحالة مراجعة
+    query = """
+        UPDATE replies
+        SET classification = 'Undecided',
+            classified_at = NOW()
+        WHERE reply_id = %s
+        RETURNING reply_id, classification
+    """
+    return execute(query, (reply_id,))
 
 
 # ─────────────────────────────────────────────
 # Agent 10 — Follow-Up Agent
 # ─────────────────────────────────────────────
 
-# TODO: Abdullah will add functions here
-# Examples:
-#   save_followup(...)
-#   get_pending_followups(...)
+def get_active_campaigns_for_followups():
+    query = """
+        SELECT campaign_id, campaign_name, followup_days, status
+        FROM campaigns
+        WHERE status NOT IN ('complete', 'failed', 'reported')
+    """
+    return fetchall(query)
+
+
+def get_sent_employer_emails(campaign_id: int):
+    query = """
+        SELECT *
+        FROM emails
+        WHERE campaign_id = %s
+        AND email_type = 'Employer Outreach'
+        AND status = 'Sent'
+        AND sent_at IS NOT NULL
+        ORDER BY sent_at ASC
+    """
+    return fetchall(query, (campaign_id,))
+
+
+def reply_exists_for_email(email_id: int):
+    query = """
+        SELECT reply_id
+        FROM replies
+        WHERE email_id = %s
+        LIMIT 1
+    """
+    return fetchone(query, (email_id,)) is not None
+
+
+def get_followup_for_email(email_id: int):
+    query = """
+        SELECT *
+        FROM follow_ups
+        WHERE email_id = %s
+        LIMIT 1
+    """
+    return fetchone(query, (email_id,))
+
+
+def save_followup_email(
+    campaign_id: int,
+    recipient_email: str,
+    recipient_name: str,
+    company_name: str,
+    subject: str,
+    body: str
+):
+    query = """
+        INSERT INTO emails (
+            campaign_id,
+            email_type,
+            recipient_email,
+            recipient_name,
+            subject,
+            body,
+            company_name,
+            status,
+            created_at
+        )
+        VALUES (%s, 'Follow-up', %s, %s, %s, %s, %s, 'Pending Approval', NOW())
+        RETURNING email_id
+    """
+    return execute(query, (
+        campaign_id,
+        recipient_email,
+        recipient_name,
+        subject,
+        body,
+        company_name
+    ))
+
+
+def save_followup_record(
+    campaign_id: int,
+    email_id: int,
+    company_name: str,
+    followup_email_id: int,
+    reason: str = "No Reply",
+    status: str = "Pending"
+):
+    query = """
+        INSERT INTO follow_ups (
+            campaign_id,
+            email_id,
+            company_name,
+            followup_email_id,
+            reason,
+            status,
+            suggested_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        RETURNING followup_id
+    """
+    return execute(query, (
+        campaign_id,
+        email_id,
+        company_name,
+        followup_email_id,
+        reason,
+        status
+    ))
+
+
+def mark_followup_company_closed(campaign_id: int, company_name: str):
+    # MVP: ما عندكم company_status table، فنحدث last_updated فقط
+    query = """
+        UPDATE campaigns
+        SET last_updated = NOW()
+        WHERE campaign_id = %s
+        RETURNING campaign_id
+    """
+    return execute(query, (campaign_id,))
 
 
 # ─────────────────────────────────────────────
@@ -997,7 +1182,174 @@ def increment_emails_sent(campaign_id: int):
 # Agent 12 — Reporting Agent
 # ─────────────────────────────────────────────
 
-# TODO: Abdulmohsen will add functions here
-# Examples:
-#   save_report(...)
-#   get_campaign_summary(...)
+def get_campaign_report_summary(campaign_id: int):
+    query = """
+        SELECT *
+        FROM campaigns
+        WHERE campaign_id = %s
+        LIMIT 1
+    """
+    return fetchone(query, (campaign_id,))
+
+
+def get_reporting_email_stats(campaign_id: int):
+    query = """
+        SELECT
+            COUNT(*) FILTER (WHERE email_type = 'Employer Outreach') AS employer_emails,
+            COUNT(*) FILTER (WHERE email_type = 'Student Notification') AS student_emails,
+            COUNT(*) FILTER (WHERE email_type = 'Follow-up') AS followup_emails,
+            COUNT(*) FILTER (WHERE status = 'Pending Approval') AS pending_approval,
+            COUNT(*) FILTER (WHERE status = 'Approved') AS approved,
+            COUNT(*) FILTER (WHERE status = 'Rejected') AS rejected,
+            COUNT(*) FILTER (WHERE status = 'Sent') AS sent,
+            COUNT(*) FILTER (WHERE status = 'Failed') AS failed
+        FROM emails
+        WHERE campaign_id = %s
+    """
+    return fetchone(query, (campaign_id,))
+
+
+def get_reporting_reply_stats(campaign_id: int):
+    query = """
+        SELECT
+            COUNT(*) AS total_replies,
+            COUNT(*) FILTER (WHERE classification = 'Interested') AS interested,
+            COUNT(*) FILTER (WHERE classification = 'Scheduled') AS scheduled,
+            COUNT(*) FILTER (WHERE classification = 'Not Interested') AS not_interested,
+            COUNT(*) FILTER (WHERE classification = 'Undecided') AS undecided
+        FROM replies
+        WHERE campaign_id = %s
+    """
+    return fetchone(query, (campaign_id,))
+
+
+def get_reporting_meeting_stats(campaign_id: int):
+    query = """
+        SELECT
+            COUNT(*) AS total_meetings,
+            COUNT(*) FILTER (WHERE status = 'Proposed') AS proposed,
+            COUNT(*) FILTER (WHERE status = 'Confirmed') AS confirmed,
+            COUNT(*) FILTER (WHERE status = 'Cancelled') AS cancelled,
+            COUNT(*) FILTER (WHERE status = 'Completed') AS completed
+        FROM meetings
+        WHERE campaign_id = %s
+    """
+    return fetchone(query, (campaign_id,))
+
+
+def get_reporting_followup_stats(campaign_id: int):
+    query = """
+        SELECT
+            COUNT(*) AS total_followups,
+            COUNT(*) FILTER (WHERE status = 'Pending') AS pending,
+            COUNT(*) FILTER (WHERE status = 'Approved') AS approved,
+            COUNT(*) FILTER (WHERE status = 'Sent') AS sent,
+            COUNT(*) FILTER (WHERE status = 'Skipped') AS skipped
+        FROM follow_ups
+        WHERE campaign_id = %s
+    """
+    return fetchone(query, (campaign_id,))
+
+
+def get_top_performing_keywords(campaign_id: int):
+    query = """
+        SELECT
+            jp.input_discovery_input_keyword_search AS keyword,
+            COUNT(DISTINCT jm.job_id) AS matched_jobs,
+            ROUND(AVG(jm.overall_match_score)::numeric, 3) AS avg_match_score
+        FROM job_matches jm
+        JOIN job_postings jp ON jm.job_id = jp.job_id
+        WHERE jm.campaign_id = %s
+        GROUP BY jp.input_discovery_input_keyword_search
+        ORDER BY avg_match_score DESC NULLS LAST
+        LIMIT 5
+    """
+    return fetchall(query, (campaign_id,))
+
+
+def get_top_responding_companies(campaign_id: int):
+    query = """
+        SELECT
+            company_name,
+            classification,
+            COUNT(*) AS replies_count
+        FROM replies
+        WHERE campaign_id = %s
+        AND classification IN ('Interested', 'Scheduled')
+        GROUP BY company_name, classification
+        ORDER BY replies_count DESC
+        LIMIT 5
+    """
+    return fetchall(query, (campaign_id,))
+
+
+def get_student_match_success(campaign_id: int):
+    query = """
+        SELECT
+            sp.student_id,
+            sp.full_name,
+            COUNT(jm.match_id) AS matches_count,
+            ROUND(AVG(jm.overall_match_score)::numeric, 3) AS avg_match_score
+        FROM job_matches jm
+        JOIN student_profiles sp ON jm.student_id = sp.student_id
+        WHERE jm.campaign_id = %s
+        GROUP BY sp.student_id, sp.full_name
+        ORDER BY matches_count DESC, avg_match_score DESC
+        LIMIT 10
+    """
+    return fetchall(query, (campaign_id,))
+
+
+def save_campaign_report(
+    campaign_id: int,
+    report_type: str,
+    total_jobs_processed: int,
+    total_companies_targeted: int,
+    total_emails_sent: int,
+    total_replies: int,
+    response_rate: float,
+    interested_count: int,
+    neutral_count: int,
+    negative_count: int,
+    meetings_booked: int,
+    top_performing_keywords,
+    top_responding_companies,
+    recommendations: str
+):
+    query = """
+        INSERT INTO reports (
+            campaign_id,
+            report_type,
+            total_jobs_processed,
+            total_companies_targeted,
+            total_emails_sent,
+            total_replies,
+            response_rate,
+            interested_count,
+            neutral_count,
+            negative_count,
+            meetings_booked,
+            top_performing_keywords,
+            top_responding_companies,
+            recommendations,
+            generated_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        RETURNING report_id
+    """
+    return execute(query, (
+        campaign_id,
+        report_type,
+        total_jobs_processed,
+        total_companies_targeted,
+        total_emails_sent,
+        total_replies,
+        response_rate,
+        interested_count,
+        neutral_count,
+        negative_count,
+        meetings_booked,
+        top_performing_keywords,
+        top_responding_companies,
+        recommendations
+    ))
