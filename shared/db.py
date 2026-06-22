@@ -1336,11 +1336,123 @@ def mark_followup_company_closed(campaign_id: int, company_name: str):
 # Agent 11 — Scheduling Agent
 # ─────────────────────────────────────────────
 
-# TODO: Osama will add functions here
-# Examples:
-#   save_meeting(...)
-#   update_meeting_status(...)
+def get_email_strategy(campaign_id: int, company_name: str):
+    query = """
+        SELECT *
+        FROM email_strategies
+        WHERE campaign_id = %s
+        AND company_name = %s
+        LIMIT 1
+    """
+    return fetchone(query, (campaign_id, company_name))
 
+
+def get_contact_by_company(company_name: str):
+    query = """
+        SELECT *
+        FROM contacts
+        WHERE company_name = %s
+        ORDER BY confidence_score DESC NULLS LAST, last_used_at DESC NULLS LAST
+        LIMIT 1
+    """
+    return fetchone(query, (company_name,))
+
+
+def save_scheduling_email(
+    campaign_id: int,
+    recipient_email: str,
+    recipient_name: str,
+    company_name: str,
+    subject: str,
+    body: str,
+    contact_id=None
+):
+    query = """
+        INSERT INTO emails (
+            campaign_id,
+            email_type,
+            recipient_email,
+            recipient_name,
+            subject,
+            body,
+            company_name,
+            contact_id,
+            status,
+            created_at
+        )
+        VALUES (%s, 'Scheduling', %s, %s, %s, %s, %s, %s, 'Pending Approval', NOW())
+        RETURNING email_id
+    """
+    return execute(query, (
+        campaign_id,
+        recipient_email,
+        recipient_name,
+        subject,
+        body,
+        company_name,
+        contact_id
+    ))
+
+
+def save_meeting_record(
+    campaign_id: int,
+    reply_id: int,
+    company_name: str,
+    contact_name: str,
+    contact_email: str,
+    proposed_slots,
+    scheduling_email_id: int
+):
+    query = """
+        INSERT INTO meetings (
+            campaign_id,
+            reply_id,
+            company_name,
+            contact_name,
+            contact_email,
+            proposed_slots,
+            status,
+            scheduling_email_id,
+            reminder_sent,
+            created_at,
+            last_updated
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, 'Proposed', %s, FALSE, NOW(), NOW())
+        RETURNING meeting_id
+    """
+    return execute(query, (
+        campaign_id,
+        reply_id,
+        company_name,
+        contact_name,
+        contact_email,
+        proposed_slots,
+        scheduling_email_id
+    ))
+
+
+def mark_meeting_confirmed(campaign_id: int, company_name: str, confirmed_slot):
+    query = """
+        UPDATE meetings
+        SET confirmed_slot = %s,
+            status = 'Confirmed',
+            last_updated = NOW()
+        WHERE campaign_id = %s
+        AND company_name = %s
+        AND status = 'Proposed'
+        RETURNING meeting_id
+    """
+    result = execute(query, (confirmed_slot, campaign_id, company_name))
+
+    if result:
+        execute("""
+            UPDATE campaigns
+            SET meetings_booked = COALESCE(meetings_booked, 0) + 1,
+                last_updated = NOW()
+            WHERE campaign_id = %s
+        """, (campaign_id,))
+
+    return result
 
 # ─────────────────────────────────────────────
 # Agent 12 — Reporting Agent
