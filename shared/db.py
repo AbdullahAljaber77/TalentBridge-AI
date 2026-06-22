@@ -958,11 +958,175 @@ def increment_emails_sent(campaign_id: int):
 # Agent 08 — Inbox Monitoring Agent
 # ─────────────────────────────────────────────
 
-# TODO: Osama will add functions here
-# Examples:
-#   save_reply(...)
-#   get_unclassified_replies(...)
 
+def get_sent_emails_for_inbox(campaign_id: int):
+    """
+    Return all SENT emails for a campaign, including their tracking headers.
+    Used by Agent 08's mock/LLM inbox sources to synthesise replies against
+    real email_ids (so foreign keys are always valid).
+    """
+    query = """
+        SELECT
+            email_id,
+            campaign_id,
+            company_name,
+            recipient_email,
+            recipient_name,
+            subject,
+            tracking_headers
+        FROM emails
+        WHERE campaign_id = %s
+          AND status = 'Sent'
+          AND sent_at IS NOT NULL
+        ORDER BY sent_at ASC
+    """
+    return fetchall(query, (campaign_id,))
+ 
+ 
+def get_sent_email_by_recipient(recipient_email: str, campaign_id: int = None):
+    """
+    Fallback matcher: find the most recent SENT email addressed to this
+    recipient. Optionally scope to a single campaign. Returns a dict or None.
+    """
+    if campaign_id is not None:
+        query = """
+            SELECT email_id, campaign_id, company_name, recipient_email
+            FROM emails
+            WHERE recipient_email = %s
+              AND status = 'Sent'
+              AND campaign_id = %s
+            ORDER BY sent_at DESC NULLS LAST
+            LIMIT 1
+        """
+        return fetchone(query, (recipient_email, campaign_id))
+ 
+    query = """
+        SELECT email_id, campaign_id, company_name, recipient_email
+        FROM emails
+        WHERE recipient_email = %s
+          AND status = 'Sent'
+        ORDER BY sent_at DESC NULLS LAST
+        LIMIT 1
+    """
+    return fetchone(query, (recipient_email,))
+ 
+ 
+def get_company_name_for_email(email_id: int):
+    """Return the company_name attached to a sent email, or None."""
+    query = """
+        SELECT company_name
+        FROM emails
+        WHERE email_id = %s
+        LIMIT 1
+    """
+    row = fetchone(query, (email_id,))
+    return row["company_name"] if row else None
+ 
+ 
+def get_inbox_check_minutes(campaign_id: int) -> int:
+    """
+    Return the campaign's configured inbox check interval (minutes).
+    Falls back to 5 if unset — `get_campaign()` does not expose this column,
+    so Agent 08 reads it directly.
+    """
+    query = """
+        SELECT inbox_check_minutes
+        FROM campaigns
+        WHERE campaign_id = %s
+        LIMIT 1
+    """
+    row = fetchone(query, (campaign_id,))
+    if row and row.get("inbox_check_minutes"):
+        return row["inbox_check_minutes"]
+    return 5
+ 
+ 
+def is_duplicate_reply(reply_from: str, reply_subject, received_at,
+                       window_hours: int = 1) -> bool:
+    """
+    True if a reply with the same sender + subject already exists within the
+    trailing `window_hours`. `IS NOT DISTINCT FROM` handles NULL subjects
+    correctly (NULL matches NULL).
+    """
+    from datetime import timedelta
+    window_start = received_at - timedelta(hours=window_hours)
+    query = """
+        SELECT reply_id
+        FROM replies
+        WHERE reply_from = %s
+          AND reply_subject IS NOT DISTINCT FROM %s
+          AND received_at > %s
+        LIMIT 1
+    """
+    return fetchone(query, (reply_from, reply_subject, window_start)) is not None
+ 
+ 
+def save_reply(
+    email_id: int,
+    campaign_id: int,
+    company_name: str,
+    reply_from: str,
+    reply_subject,
+    reply_body: str,
+    received_at,
+    classification: str = "Pending Classification",
+):
+    """
+    Insert one incoming reply and return its new reply_id (or None).
+    classified_at / llm_model_used are left NULL — Agent 09 sets those.
+    """
+    query = """
+        INSERT INTO replies (
+            email_id,
+            campaign_id,
+            company_name,
+            reply_from,
+            reply_subject,
+            reply_body,
+            classification,
+            received_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING reply_id
+    """
+    row = execute(query, (
+        email_id,
+        campaign_id,
+        company_name,
+        reply_from,
+        reply_subject,
+        reply_body,
+        classification,
+        received_at,
+    ))
+    return row["reply_id"] if row else None
+ 
+ 
+def increment_replies_received(campaign_id: int):
+    """Increment campaigns.replies_received by 1 and bump last_updated."""
+    query = """
+        UPDATE campaigns
+        SET replies_received = COALESCE(replies_received, 0) + 1,
+            last_updated     = NOW()
+        WHERE campaign_id = %s
+        RETURNING campaign_id, replies_received
+    """
+    return execute(query, (campaign_id,))
+ 
+ 
+def log_unmatched_reply(reply: dict):
+    """
+    Record a reply that could not be matched to any campaign.
+ 
+    MVP: there is no `unmatched_replies` table yet, so we log it for the
+    dashboard/operator. TODO (team): add an unmatched_replies table and insert
+    here so the human can review unmatched mail from the UI.
+    """
+    print(
+        "[inbox_monitor] UNMATCHED reply "
+        f"from={reply.get('from')!r} subject={reply.get('subject')!r}"
+    )
+    return None
 
 # ─────────────────────────────────────────────
 # Agent 09 — Response Classification Agent
