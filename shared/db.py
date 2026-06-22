@@ -447,7 +447,7 @@ def execute(query: str, params: tuple = ()):
 
 def get_company_targets_for_contact_discovery(campaign_id: int):
     query = """
-        SELECT DISTINCT
+        SELECT DISTINCT ON (jp.company_name)
             jp.company_name,
             jp.domain,
             jp.company_link,
@@ -456,7 +456,7 @@ def get_company_targets_for_contact_discovery(campaign_id: int):
         FROM job_matches jm
         JOIN job_postings jp ON jm.job_id = jp.job_id
         WHERE jm.campaign_id = %s
-        ORDER BY jp.company_name
+        ORDER BY jp.company_name, jp.job_id
     """
     return fetchall(query, (campaign_id,))
 

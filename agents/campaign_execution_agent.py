@@ -70,7 +70,7 @@ def approve_and_send_email(
     if not is_valid:
         db.mark_email_failed(email_id, message)
         return {
-            "status": "failed_validation",
+            "status": "failed validation",
             "email_id": email_id,
             "reason": message
         }
@@ -98,7 +98,7 @@ def approve_and_send_email(
     failed = db.mark_email_failed(email_id, "Simulated sending failed")
 
     return {
-        "status": "failed_sending",
+        "status": "failed sending",
         "email_id": email_id,
         "failed": failed
     }
@@ -113,7 +113,7 @@ def edit_email(
 
     if not email:
         return {
-            "status": "not_found",
+            "status": "not found",
             "email_id": email_id
         }
 
@@ -122,13 +122,13 @@ def edit_email(
 
     if not subject.strip():
         return {
-            "status": "failed_validation",
+            "status": "failed validation",
             "reason": "Subject cannot be empty"
         }
 
     if not body.strip():
         return {
-            "status": "failed_validation",
+            "status": "failed validation",
             "reason": "Body cannot be empty"
         }
 
@@ -140,7 +140,7 @@ def edit_email(
         "updated": updated
     }
 
-
+# Modify in the UX/UI to allow selecting from predefined reasons or entering a custom reason for rejection
 def reject_email(
     email_id: int,
     reason: str = "Other"
@@ -189,9 +189,24 @@ def review_email_action(
         )
 
     return {
-        "status": "invalid_action",
+        "status": "invalid action",
         "email_id": email_id,
         "allowed_actions": ["approve", "edit", "reject"]
+    }
+
+def finalize_execution(campaign_id: int) -> Dict[str, Any]:
+    """
+    Called when the human finishes reviewing the approval queue.
+    Marks the campaign 'emails sent' — the handoff to the monitoring phase
+    (Agents 08-12). This is NOT campaign completion.
+    """
+    remaining = db.get_pending_emails(campaign_id)
+    db.update_campaign_status(campaign_id, "emails sent")
+
+    return {
+        "status": "emails sent",
+        "campaign_id": campaign_id,
+        "pending_remaining": len(remaining),  # warns if finalized early
     }
 
 
@@ -207,7 +222,7 @@ def campaign_execution_agent(campaign_id: int) -> Dict[str, Any]:
     queue = load_approval_queue(campaign_id)
 
     return {
-        "status": "awaiting_human_review",
+        "status": "awaiting human review",
         "campaign_id": campaign_id,
         "pending_count": queue["pending_count"],
         "emails": queue["emails"]

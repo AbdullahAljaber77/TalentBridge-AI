@@ -26,26 +26,35 @@ EMPLOYER_SYSTEM = build_system_prompt(
         "in company_research. (4) If none of those are provided, open directly from the "
         "matched candidates — e.g. that strong graduates have been identified whose "
         "skills align with roles at the company.\n"
+        "- Early on (first or second sentence), briefly identify the sender as "
+        "reaching out on behalf of WeCloudData, the leading data science and AI "
+        "academy whose blended-learning courses have helped thousands of learners "
+        "and many enterprises advance their data journeys. Introduce this naturally "
+        "and concisely — a brief mention, not a full marketing paragraph.\n"
         "- If contact_name is provided, address them by name (e.g. 'Dear Mr. Greenhalgh'); "
         "if it is null, use 'Dear Hiring Team'.\n"
-        "- Reference the matched candidates concretely (the roles they fit and 2-3 key "
-        "skills), but summarize naturally — do NOT paste a raw list.\n"
+        "- Describe the matched graduates as a GROUP, not individuals: how many "
+        "matched (use candidate_count), the roles or areas they fit, and the main "
+        "skill areas across the cohort. Do NOT name individual candidates or give "
+        "per-person profiles. This first email opens a conversation, not a pitch of "
+        "specific people.\n"
         "- Match the requested tone and the length_guidance.\n"
         "- Close by inviting the reader to take the action described in "
         "call_to_action, phrased naturally as part of a sentence (e.g. 'Would you "
         "be open to a 15-minute introductory call?'). Convey that exact action, but "
         "do NOT paste the call_to_action text verbatim as a standalone line or label.\n"
-        "- Close with a brief professional sign-off (e.g. 'Best regards').\n"
-        "- Be precise per candidate: experience level and skills differ between "
-        "candidates. Never state a single experience range as if it applies to all of "
-        "them. Either attribute experience to each candidate individually, or omit "
-        "experience entirely — never generalize it.\n"
-        "- The matched_candidates list may include the same person more than once when "
-        "they fit multiple roles. Use candidate_count (distinct people) for any headline "
-        "number — never imply there are more people than candidate_count. When a person "
-        "appears for multiple roles, you may mention their roles together rather than "
-        "repeating their full profile.\n"
+        "- Close with 'Best regards,' on its own line, followed by the sender "
+        "identity line 'The WeCloudData Team'.\n"
+        "- Speak about the cohort's experience and skills in general terms. Do not "
+        "claim one experience range fits everyone; describe the range broadly or omit "
+        "specifics.\n"
+        "- A person may match multiple roles, so matched_candidates can list them more "
+        "than once. Use candidate_count (distinct people) for any headline number, and "
+        "never imply there are more people than candidate_count.\n"
         "- Use only facts present in the data. Never output placeholders like [Name] or [Company].\n"
+        "- Write in plain text only. Do not use markdown formatting such as ** for "
+        "bold, # headings, or backticks. Do not use em-dashes (—); use commas, "
+        "periods, or parentheses instead.\n"
         "Return JSON with exactly two keys: 'subject' and 'body'."
     ),
 )
@@ -53,23 +62,31 @@ EMPLOYER_SYSTEM = build_system_prompt(
 STUDENT_SYSTEM = build_system_prompt(
     role="career advisor writing to a bootcamp graduate",
     instructions=(
-        "Write a warm, encouraging email notifying a graduate that they have been "
-        "matched to a specific job opening. Keep it personal and motivating, not corporate.\n"
+        "Write a warm, encouraging email notifying a graduate that our matching system "
+        "has identified them as a potential candidate for one or more job openings. "
+        "Keep it personal and motivating, not corporate.\n"
         "Rules:\n"
         "- Greet the student by first name (e.g. 'Hi Ahmed,').\n"
-        "- Share the good news: they matched with the company (company_name) for the "
-        "role (job_title).\n"
-        "- Briefly say why they're a good fit, referencing 2-3 of their relevant skills "
+        "- Make clear this is a PRELIMINARY, automated match from our system, not a "
+        "final decision, interview invitation, or job offer. The company has not "
+        "selected them; our system flagged them as a potential fit. Say this kindly so "
+        "it stays encouraging.\n"
+        "- List every role in 'matches'. For each: company name, role title, location "
+        "if present, and the application link if present. If a match's application_link "
+        "is null, tell them to search that company's careers page instead of inventing "
+        "a link.\n"
+        "- Mention a role's company_rating ONLY if provided and not null.\n"
+        "- Briefly say why they're a good fit overall, referencing 2-3 of their skills "
         "and their field. Be genuine, not flattering.\n"
-        "- Include the job details that are present: role title and location. Mention "
-        "company_rating ONLY if it is provided and not null; if it is null, do not "
-        "mention any rating at all.\n"
-        "- Application link: if application_link is provided, include it clearly as where "
-        "to apply. If application_link is null, do NOT invent a link — instead encourage "
-        "the student to search for the company's careers page and look for the role there.\n"
-        "- Keep it concise (about 90-140 words).\n"
-        "- Close warmly and sign off as 'The WeCloudData Team'.\n"
+        "- Reference WeCloudData naturally as the academy they trained with. Do not "
+        "introduce it as unfamiliar; they are already a graduate.\n"
+        "- Keep it concise and skimmable. With several roles, present them as a short list.\n"
+        "- Close warmly with 'Best regards,' on its own line, followed by "
+        "'The WeCloudData Team'.\n"
         "- Use only facts present in the data. Never output placeholders like [Name].\n"
+        "- Write in plain text only. Do not use markdown formatting such as ** for "
+        "bold, # headings, or backticks. Do not use em-dashes (—); use commas, "
+        "periods, or parentheses instead.\n"
         "Return JSON with exactly two keys: 'subject' and 'body'."
     ),
 )
@@ -257,52 +274,36 @@ def generate_employer_email(campaign_id: int, company_name: str, strategy: dict,
     email["validation"] = check
     return email
 
-def generate_student_email(campaign_id: int, company_name: str, match: dict,
-                           student: dict, job, research: dict = None) -> dict:
-    """
-    One notification email to a student about a specific matched job posting.
-    Resolves the apply link and omits the rating line when rating is null.
-    """
-    link_info = resolve_application_link(job) if job else {"link": None, "source": "Not Available"}
-    skills = match.get("matched_skills") or student.get("skills") or []
+def generate_student_digest_email(campaign_id: int, student: dict, items: list[dict]) -> dict:
+    """One notification per student, covering every role they matched in this campaign."""
     fn = (student.get("full_name") or "").strip()
     first = fn.split()[0] if fn else "there"
+    companies = sorted({it["company_name"] for it in items})
+    company_label = companies[0] if len(companies) == 1 else f"{len(companies)} companies"
 
     data = {
-        "company_name":       company_name,
-        "company_blurb":      (research or {}).get("research_summary"),
         "student_first_name": first,
-        "student_full_name":  student.get("full_name"),
-        "student_field":      student.get("field"),
-        "student_skills":     skills,
-        "student_experience": student.get("experience_years"),
-        "available_to_start": student.get("available_to_start"),
-        "job_title":          match.get("job_title") or (job.job_title if job else None),
-        "job_location":       (job.location if job else None),
-        "company_rating":     float(job.company_rating) if (job and job.company_rating is not None) else None,
-        "application_link":   link_info["link"],                        # None -> follow-up
-        "application_source": link_info["source"],
+        "student_field": student.get("field"),
+        "student_skills": student.get("skills"),
+        "match_count": len(items),
+        "matches": items,
     }
-
-    instruction = "Write a personalized job-match notification email to this graduate."
-    result = call_llm_with_data(
-        instruction=instruction, data=data,
-        system=STUDENT_SYSTEM, required_keys=["subject", "body"],
-    )
+    instruction = "Write one notification email to this graduate summarizing all the roles our system matched them to."
+    result = call_llm_with_data(instruction=instruction, data=data,
+                                system=STUDENT_SYSTEM, required_keys=["subject", "body"])
 
     email = {
-        "campaign_id":      campaign_id,
-        "email_type":       "Student Notification",
-        "company_name":     company_name,
-        "recipient_email":  student.get("email"),
-        "recipient_name":   student.get("full_name"),
-        "contact_id":       None,
-        "student_id":       student.get("student_id"),
-        "contact_verified": None,
-        "subject":          (result.get("subject") or "").strip(),
-        "body":             (result.get("body") or "").strip(),
+        "campaign_id": campaign_id,
+        "email_type": "Student Notification",
+        "company_name": company_label,
+        "recipient_email": student.get("email"),
+        "recipient_name": student.get("full_name"),
+        "contact_id": None,
+        "student_id": student.get("student_id"),
+        "contact_verified": True,
+        "subject": (result.get("subject") or "").strip(),
+        "body": (result.get("body") or "").strip(),
     }
-
     check = validate_email(email)
     if not check["valid"]:
         result = call_llm_with_data(
@@ -314,7 +315,6 @@ def generate_student_email(campaign_id: int, company_name: str, match: dict,
         email["subject"] = (result.get("subject") or "").strip()
         email["body"]    = (result.get("body") or "").strip()
         check = validate_email(email)
-
     email["validation"] = check
     return email
 
@@ -338,7 +338,7 @@ def email_generation_agent(campaign_id: int) -> dict:
         "total": 0,
         "errors": [],
     }
-
+    student_items: dict[int, list[dict]] = {}
     for row in companies:
         company = row["company_name"]
         summary["companies"] += 1
@@ -351,7 +351,6 @@ def email_generation_agent(campaign_id: int) -> dict:
             students = get_students_by_ids([m["student_id"] for m in matches])
             students_by_id = {s["student_id"]: s for s in students}
 
-            # 1 employer email for the whole company
             employer = generate_employer_email(
                 campaign_id, company, strategy, research, contact,
                 matches, list(students_by_id.values()),
@@ -359,25 +358,41 @@ def email_generation_agent(campaign_id: int) -> dict:
             save_email(employer)
             summary["employer_emails"] += 1
 
-            # 1 student email per match (per job posting)
             for m in matches:
-                student = students_by_id.get(m["student_id"])
-                if not student:
+                if m["student_id"] not in students_by_id:
                     summary["errors"].append(f"{company}: no profile for student {m['student_id']}")
                     continue
                 job = get_job_posting(m["job_id"])
-                student_email = generate_student_email(
-                    campaign_id, company, m, student, job, research,
-                )
-                save_email(student_email)
-                summary["student_emails"] += 1
+                link = resolve_application_link(job) if job else {"link": None, "source": "Not Available"}
+                student_items.setdefault(m["student_id"], []).append({
+                    "company_name":       company,
+                    "job_title":          m.get("job_title") or (job.job_title if job else None),
+                    "job_location":       (job.location if job else None),
+                    "company_rating":     float(job.company_rating) if (job and job.company_rating is not None) else None,
+                    "application_link":   link["link"],
+                    "application_source": link["source"],
+                    "matched_skills":     m.get("matched_skills") or [],
+                })
 
         except Exception as e:
             summary["errors"].append(f"{company}: {type(e).__name__}: {e}")
             continue
 
+    # one digest email per student, across all their matches
+    all_students = get_students_by_ids(list(student_items.keys()))
+    profiles = {s["student_id"]: s for s in all_students}
+    for sid, items in student_items.items():
+        student = profiles.get(sid)
+        if not student:
+            summary["errors"].append(f"student {sid}: no profile")
+            continue
+        try:
+            save_email(generate_student_digest_email(campaign_id, student, items))
+            summary["student_emails"] += 1
+        except Exception as e:
+            summary["errors"].append(f"student {sid}: {type(e).__name__}: {e}")
+
     summary["total"] = summary["employer_emails"] + summary["student_emails"]
-    update_campaign_progress(campaign_id, "emails generated",
-                             emails_generated=summary["total"])
+    update_campaign_progress(campaign_id, "emails generated", emails_generated=summary["total"])
     summary["status"] = "emails generated"
     return summary
