@@ -34,7 +34,7 @@ class OutreachState(TypedDict, total=False):
     campaign_id: int
     finalize: bool                 # human's signal on resume: done or pause again
     step_counts: Dict[str, Any]    # what each node produced, for visibility
-    job_limit: int                 # optional cap on jobs analyzed (None = all)
+    params: Dict[str, Any]         # per-campaign tuning knobs (see runner)
     errors: List[str]
     summary: Dict[str, Any]
 
@@ -53,7 +53,8 @@ def job_analysis_node(state: OutreachState) -> OutreachState:
     cid = state["campaign_id"]
     errors = list(state.get("errors", []))
     try:
-        r = run_job_analysis(cid, limit=state.get("job_limit"))
+        p = state.get("params", {})
+        r = run_job_analysis(cid, limit=p.get("job_limit"))
     except Exception as exc:
         errors.append(f"01 job_analysis: {exc}")
         r = {"status": "error"}
@@ -63,8 +64,14 @@ def job_analysis_node(state: OutreachState) -> OutreachState:
 def targeting_node(state: OutreachState) -> OutreachState:
     cid = state["campaign_id"]
     errors = list(state.get("errors", []))
+    p = state.get("params", {})
     try:
-        r = run_targeting_agent(cid)
+        r = run_targeting_agent(
+            cid,
+            min_match_score=p.get("min_match_score", 0.2),
+            experience_strict=p.get("experience_strict", True),
+            top_k=p.get("top_k", 5),
+        )
     except Exception as exc:
         errors.append(f"02 targeting: {exc}")
         r = {"status": "error"}

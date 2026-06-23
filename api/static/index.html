@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TalentBridge — Outreach Console</title>
+<style>
+  :root{
+    --ink:#11203a; --ink-2:#1c2f4f; --line:#dfe3ec; --paper:#f6f7fb;
+    --card:#ffffff; --muted:#5d6b85; --amber:#e0922f; --amber-deep:#b9761f;
+    --green:#1f8a5b; --red:#c0392b; --blue:#2f6fb0;
+    --r:10px; --shadow:0 1px 2px rgba(17,32,58,.06),0 8px 24px rgba(17,32,58,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+  h1,h2,h3{font-family:"Segoe UI Semibold","Segoe UI",sans-serif;letter-spacing:-.01em;margin:0}
+  header.top{background:var(--ink);color:#fff;padding:18px 28px;display:flex;
+    align-items:center;gap:14px;position:sticky;top:0;z-index:5}
+  header.top .mark{width:26px;height:26px;border-radius:6px;
+    background:linear-gradient(135deg,var(--amber),var(--amber-deep));
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.15)}
+  header.top h1{font-size:18px;font-weight:600}
+  header.top .sub{color:#9fb0cc;font-size:12.5px;margin-left:2px}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px}
+  .bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:12px;flex-wrap:wrap}
+  .bar h2{font-size:20px}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:#fff;
+    color:var(--ink);padding:9px 15px;border-radius:8px;transition:.15s}
+  button:hover{border-color:#b9c2d6}
+  button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  button.primary:hover{background:var(--ink-2)}
+  button.amber{background:var(--amber);color:#fff;border-color:var(--amber-deep)}
+  button.amber:hover{background:var(--amber-deep)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+    box-shadow:var(--shadow);padding:18px}
+  .card .row1{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .card h3{font-size:16px}
+  .card .kw{color:var(--muted);font-size:12.5px;margin-top:3px}
+  .pill{font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .pill.pending{background:#eef1f6;color:#5d6b85}
+  .pill.generated,.pill.analyzing{background:#fef0db;color:var(--amber-deep)}
+  .pill.sent{background:#e7f1fb;color:var(--blue)}
+  .pill.monitoring{background:#e6f4ec;color:var(--green)}
+  .stats{display:flex;gap:18px;margin:14px 0 16px;border-top:1px solid var(--line);padding-top:13px}
+  .stat .n{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+  .stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .card .actions{display:flex;gap:8px}
+  .muted{color:var(--muted)}
+  .empty{text-align:center;color:var(--muted);padding:50px 20px}
+  /* modal */
+  .scrim{position:fixed;inset:0;background:rgba(17,32,58,.45);display:none;
+    align-items:flex-start;justify-content:center;padding:40px 16px;z-index:20;overflow:auto}
+  .scrim.on{display:flex}
+  .modal{background:#fff;border-radius:14px;width:100%;max-width:540px;box-shadow:var(--shadow);
+    overflow:hidden}
+  .modal h2{padding:20px 24px;border-bottom:1px solid var(--line);font-size:18px}
+  .modal .body{padding:22px 24px}
+  .field{margin-bottom:15px}
+  .field label{display:block;font-size:13px;font-weight:600;margin-bottom:5px}
+  .field input,.field select{width:100%;padding:9px 11px;border:1px solid var(--line);
+    border-radius:8px;font:inherit;color:var(--ink)}
+  .field .hint{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+  details.adv{margin-top:6px;border-top:1px dashed var(--line);padding-top:12px}
+  details.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2)}
+  .modal .foot{padding:16px 24px;border-top:1px solid var(--line);display:flex;
+    justify-content:flex-end;gap:10px;background:var(--paper)}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:#fff;padding:11px 18px;border-radius:9px;font-size:13.5px;
+    box-shadow:var(--shadow);opacity:0;transition:.25s;pointer-events:none;z-index:40}
+  .toast.on{opacity:1}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid #fff;border-top-color:transparent;
+    border-radius:50%;animation:s .7s linear infinite;vertical-align:-2px;margin-right:7px}
+  @keyframes s{to{transform:rotate(360deg)}}
+  .qrow{background:#fff;border:1px solid var(--line);border-radius:var(--r);
+    box-shadow:var(--shadow);margin-bottom:13px;overflow:hidden}
+  .qrow.done{opacity:.5}
+  .qhead{display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer}
+  .qhead .badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;white-space:nowrap}
+  .badge.emp{background:#fef0db;color:var(--amber-deep)}
+  .badge.stu{background:#e7f1fb;color:var(--blue)}
+  .badge.fol{background:#eef1f6;color:var(--muted)}
+  .badge.sch{background:#e6f4ec;color:var(--green)}
+  .qhead .who{flex:1;min-width:0}
+  .qhead .who .co{font-weight:600;font-size:14.5px}
+  .qhead .who .to{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qhead .chev{color:var(--muted);transition:.2s}
+  .qrow.open .chev{transform:rotate(90deg)}
+  .qbody{display:none;padding:0 16px 16px;border-top:1px solid var(--line)}
+  .qrow.open .qbody{display:block}
+  .qbody label{display:block;font-size:12px;font-weight:600;margin:13px 0 5px;color:var(--ink-2)}
+  .qbody input,.qbody textarea{width:100%;padding:9px 11px;border:1px solid var(--line);
+    border-radius:8px;font:inherit;color:var(--ink)}
+  .qbody textarea{min-height:200px;resize:vertical;line-height:1.55;font-size:13.5px}
+  .qbody .qactions{display:flex;gap:9px;margin-top:13px}
+  .qbody .dirty{color:var(--amber-deep);font-size:12px;font-weight:600;align-self:center;display:none}
+  .qbody.isdirty .dirty{display:inline}
+  .rcount{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 16px;
+    box-shadow:var(--shadow);display:flex;align-items:center;gap:9px}
+  .rcount .dot{width:9px;height:9px;border-radius:50%}
+  .rcount .n{font-weight:700;font-variant-numeric:tabular-nums}
+  .dot.int{background:var(--green)} .dot.not{background:var(--red)}
+  .dot.und{background:#9aa6bd} .dot.sch{background:var(--blue)}
+  .rrow{background:#fff;border:1px solid var(--line);border-left-width:4px;border-radius:10px;
+    box-shadow:var(--shadow);margin-bottom:12px;padding:14px 16px}
+  .rrow.int{border-left-color:var(--green)} .rrow.not{border-left-color:var(--red)}
+  .rrow.und{border-left-color:#9aa6bd} .rrow.sch{border-left-color:var(--blue)}
+  .rrow .rtop{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:7px}
+  .rrow .co{font-weight:600}
+  .rrow .from{font-size:12px;color:var(--muted)}
+  .rrow .cls{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px}
+  .cls.int{background:#e6f4ec;color:var(--green)} .cls.not{background:#fae9e7;color:var(--red)}
+  .cls.und{background:#eef1f6;color:var(--muted)} .cls.sch{background:#e7f1fb;color:var(--blue)}
+  .rrow .body{font-size:13.5px;color:#33415c;line-height:1.5;white-space:pre-wrap;
+    max-height:80px;overflow:hidden;position:relative}
+  .rrow .conf{font-size:11px;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="mark"></div>
+  <div>
+    <h1>TalentBridge</h1>
+  </div>
+  <span class="sub">Employer Outreach Console</span>
+</header>
+
+<div class="wrap" id="view-campaigns">
+  <div class="bar">
+    <h2>Campaigns</h2>
+    <div style="display:flex;gap:10px">
+      <button id="refreshBtn">Retrieve campaigns</button>
+      <button class="primary" id="newBtn">New campaign</button>
+    </div>
+  </div>
+  <div id="list" class="grid"></div>
+  <div id="empty" class="empty" style="display:none">No campaigns yet. Create one to begin.</div>
+</div>
+
+<!-- Queue view -->
+<div class="wrap" id="view-queue" style="display:none">
+  <div class="bar">
+    <div>
+      <button id="backBtn" style="margin-bottom:8px">← Back to campaigns</button>
+      <h2 id="q_title">Approval queue</h2>
+      <div class="muted" id="q_sub" style="font-size:13px;margin-top:2px"></div>
+    </div>
+  </div>
+  <div id="q_lockedNote" style="display:none;background:#eef1f6;border:1px solid var(--line);
+       border-radius:10px;padding:13px 16px;margin-bottom:14px;color:var(--muted);font-size:13.5px">
+    This campaign's outreach is complete. The emails below are shown as a record and can't be changed.
+  </div>
+  <div id="q_list"></div>
+  <div id="q_empty" class="empty" style="display:none">Queue is empty — nothing pending approval.</div>
+  <div id="q_footbar" style="position:sticky;bottom:0;background:var(--paper);
+       border-top:1px solid var(--line);margin-top:18px;padding:16px 0;
+       display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+    <div class="muted" style="font-size:13px;max-width:560px">
+      Approve or reject each email — approved emails send right away. You can leave and come
+      back anytime; pending emails stay here. Click <strong>Finish outreach</strong> when you're
+      done — anything still pending won't be sent.
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="amber" id="finalizeBtn">Finish outreach</button>
+    </div>
+  </div>
+</div>
+
+<!-- Replies / monitoring view -->
+<div class="wrap" id="view-replies" style="display:none">
+  <div class="bar">
+    <div>
+      <button id="rBackBtn" style="margin-bottom:8px">← Back to campaigns</button>
+      <h2 id="r_title">Replies</h2>
+      <div class="muted" id="r_sub" style="font-size:13px;margin-top:2px"></div>
+    </div>
+    <button class="amber" id="checkBtn">Check for replies</button>
+  </div>
+  <div id="r_summary" style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap"></div>
+  <div id="r_list"></div>
+  <div id="r_empty" class="empty" style="display:none">
+    No replies yet. Click <strong>Check for replies</strong> to scan the inbox.
+  </div>
+</div>
+
+<!-- Create modal -->
+<div class="scrim" id="scrim">
+  <div class="modal">
+    <h2>New campaign</h2>
+    <div class="body">
+      <div class="field">
+        <label>Campaign name</label>
+        <input id="f_name" placeholder="e.g. AI Engineers — Riyadh Q3">
+      </div>
+      <div class="field">
+        <label>Keywords <span class="muted">(comma-separated)</span></label>
+        <input id="f_kw" placeholder="ai engineer, machine learning engineer">
+      </div>
+      <div class="two">
+        <div class="field"><label>From date</label><input id="f_from" type="date" value="2025-06-01"></div>
+        <div class="field"><label>To date</label><input id="f_to" type="date" value="2026-01-31"></div>
+      </div>
+      <details class="adv">
+        <summary>Advanced tuning</summary>
+        <div style="margin-top:13px">
+          <div class="two">
+            <div class="field">
+              <label>Job limit</label>
+              <input id="f_limit" type="number" min="1" placeholder="all jobs">
+              <div class="hint">Cap jobs analyzed (blank = all). Use a small number to test.</div>
+            </div>
+            <div class="field">
+              <label>Top matches per job</label>
+              <input id="f_topk" type="number" min="1" value="5">
+              <div class="hint">Max students matched to each role.</div>
+            </div>
+          </div>
+          <div class="two">
+            <div class="field">
+              <label>Min match score</label>
+              <input id="f_score" type="number" step="0.05" min="0" max="1" value="0.2">
+              <div class="hint">0–1. Higher = stricter, fewer matches.</div>
+            </div>
+            <div class="field">
+              <label>Experience match</label>
+              <select id="f_strict">
+                <option value="true">Strict (exact level)</option>
+                <option value="false">Relaxed (allow one level down)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </details>
+    </div>
+    <div class="foot">
+      <button id="cancelBtn">Cancel</button>
+      <button class="primary" id="createBtn">Create campaign</button>
+    </div>
+  </div>
+</div>
+
+<!-- Launch params modal -->
+<div class="scrim" id="launchScrim">
+  <div class="modal">
+    <h2>Launch outreach</h2>
+    <div class="body">
+      <p class="muted" style="margin-top:0;font-size:13.5px">
+        Tune this run before the pipeline starts. Defaults are sensible — lower the job limit to keep test runs fast.
+      </p>
+      <div class="two">
+        <div class="field">
+          <label>Job limit</label>
+          <input id="l_limit" type="number" min="1" value="5">
+          <div class="hint">Cap jobs analyzed. Blank = all.</div>
+        </div>
+        <div class="field">
+          <label>Top matches per job</label>
+          <input id="l_topk" type="number" min="1" value="5">
+        </div>
+      </div>
+      <div class="two">
+        <div class="field">
+          <label>Min match score</label>
+          <input id="l_score" type="number" step="0.05" min="0" max="1" value="0.2">
+          <div class="hint">0–1. Higher = stricter.</div>
+        </div>
+        <div class="field">
+          <label>Experience match</label>
+          <select id="l_strict">
+            <option value="true">Strict (exact level)</option>
+            <option value="false">Relaxed (one level down)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <button id="launchCancel">Cancel</button>
+      <button class="amber" id="launchGo">Start pipeline</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = "";  // same origin
+const $ = s => document.querySelector(s);
+const listEl = $("#list"), emptyEl = $("#empty"), toastEl = $("#toast");
+const pollers = {};  // campaign_id -> interval
+
+function toast(msg){ toastEl.textContent = msg; toastEl.classList.add("on");
+  setTimeout(()=>toastEl.classList.remove("on"), 2600); }
+
+async function api(path, method="GET", body){
+  const opt = {method, headers:{"Content-Type":"application/json"}};
+  if(body!==undefined) opt.body = JSON.stringify(body);
+  const r = await fetch(API+path, opt);
+  if(!r.ok){ const e = await r.json().catch(()=>({detail:r.statusText}));
+    throw new Error(e.detail || ("HTTP "+r.status)); }
+  return r.json();
+}
+
+function statusClass(s){
+  s=(s||"").toLowerCase();
+  if(s.includes("monitor")) return "monitoring";
+  if(s.includes("sent")) return "sent";
+  if(s.includes("generat")||s.includes("analy")||s.includes("match")||s.includes("research")) return "generated";
+  return "pending";
+}
+
+function cardHTML(c){
+  const kws = Array.isArray(c.selected_keywords)? c.selected_keywords.join(", ") : (c.selected_keywords||"");
+  const launchable = ["pending","emails generated"].includes((c.status||"").toLowerCase());
+  return `<div class="card" data-id="${c.campaign_id}">
+    <div class="row1">
+      <div>
+        <h3>${c.campaign_name||("Campaign "+c.campaign_id)}</h3>
+        <div class="kw">${kws}</div>
+      </div>
+      <span class="pill ${statusClass(c.status)}">${c.status||"—"}</span>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="n">${c.total_jobs_found??0}</div><div class="l">Jobs</div></div>
+      <div class="stat"><div class="n">${c.replies_received??0}</div><div class="l">Replies</div></div>
+      <div class="stat"><div class="n">${c.meetings_booked??0}</div><div class="l">Meetings</div></div>
+    </div>
+    <div class="actions">
+      <button class="amber launch" data-id="${c.campaign_id}">Launch outreach</button>
+      <button class="queue" data-id="${c.campaign_id}">View queue</button>
+      <button class="replies" data-id="${c.campaign_id}">Replies</button>
+    </div>
+  </div>`;
+}
+
+async function loadCampaigns(){
+  try{
+    const d = await api("/api/campaigns");
+    const cs = d.campaigns||[];
+    listEl.innerHTML = cs.map(cardHTML).join("");
+    emptyEl.style.display = cs.length? "none":"block";
+  }catch(e){ toast("Couldn't load campaigns: "+e.message); }
+}
+
+// launch with polling
+async function launch(id, btn, params={}){
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spin"></span>Starting…`;
+  try{
+    await api(`/api/campaigns/${id}/launch`, "POST", params);  // defaults; advanced params come from create-time later
+    pollLaunch(id, btn);
+  }catch(e){
+    toast("Launch failed: "+e.message);
+    btn.disabled=false; btn.textContent="Launch outreach";
+  }
+}
+function pollLaunch(id, btn){
+  clearInterval(pollers[id]);
+  pollers[id] = setInterval(async ()=>{
+    try{
+      const s = await api(`/api/campaigns/${id}/launch-status`);
+      if(s.state==="running"){ btn.innerHTML=`<span class="spin"></span>Running pipeline…`; return; }
+      clearInterval(pollers[id]);
+      if(s.state==="paused_for_approval"){
+        const n = s.interrupt?.pending_count ?? "";
+        btn.disabled=false; btn.textContent="Launch outreach";
+        toast(`Campaign ${id} ready — ${n} emails awaiting approval`);
+        loadCampaigns();
+      }else if(s.state==="error"){
+        btn.disabled=false; btn.textContent="Launch outreach";
+        toast("Pipeline error: "+(s.detail||"unknown"));
+      }
+    }catch(e){ /* keep polling */ }
+  }, 2500);
+}
+
+// events
+$("#refreshBtn").onclick = loadCampaigns;
+$("#newBtn").onclick = ()=> $("#scrim").classList.add("on");
+$("#cancelBtn").onclick = ()=> $("#scrim").classList.remove("on");
+$("#scrim").onclick = e=>{ if(e.target===$("#scrim")) $("#scrim").classList.remove("on"); };
+
+$("#createBtn").onclick = async ()=>{
+  const name = $("#f_name").value.trim();
+  const kw = $("#f_kw").value.split(",").map(s=>s.trim()).filter(Boolean);
+  if(!name || !kw.length){ toast("Name and at least one keyword are required."); return; }
+  const payload = {
+    campaign_name:name, selected_keywords:kw,
+    date_range_start:$("#f_from").value, date_range_end:$("#f_to").value,
+  };
+  try{
+    const d = await api("/api/campaigns","POST",payload);
+    $("#scrim").classList.remove("on");
+    ["f_name","f_kw"].forEach(i=>$("#"+i).value="");
+    toast(`Campaign ${d.campaign_id} created`);
+    loadCampaigns();
+  }catch(e){ toast("Create failed: "+e.message); }
+};
+
+let launchTarget = null;  // {id, btn}
+listEl.onclick = e=>{
+  const lb = e.target.closest(".launch");
+  if(lb){ launchTarget = {id:lb.dataset.id, btn:lb}; openLaunchModal(); return; }
+  const qb = e.target.closest(".queue");
+  if(qb){ openQueue(qb.dataset.id); }
+};
+
+function openLaunchModal(){ $("#launchScrim").classList.add("on"); }
+$("#launchCancel").onclick = ()=> $("#launchScrim").classList.remove("on");
+$("#launchScrim").onclick = e=>{ if(e.target===$("#launchScrim")) $("#launchScrim").classList.remove("on"); };
+$("#launchGo").onclick = ()=>{
+  const limitRaw = $("#l_limit").value.trim();
+  const params = {
+    job_limit: limitRaw==="" ? null : parseInt(limitRaw,10),
+    top_k: parseInt($("#l_topk").value,10) || 5,
+    min_match_score: parseFloat($("#l_score").value) || 0.2,
+    experience_strict: $("#l_strict").value === "true",
+  };
+  $("#launchScrim").classList.remove("on");
+  if(launchTarget) launch(launchTarget.id, launchTarget.btn, params);
+};
+
+// ── Queue screen ──────────────────────────────
+let currentCampaign = null;
+const badgeMap = {"Employer Outreach":["emp","Employer"],"Student Notification":["stu","Student"],
+  "Follow-up":["fol","Follow-up"],"Scheduling":["sch","Scheduling"]};
+
+function showView(which){
+  $("#view-campaigns").style.display = which==="campaigns"? "block":"none";
+  $("#view-queue").style.display = which==="queue"? "block":"none";
+  $("#view-replies").style.display = which==="replies"? "block":"none";
+  window.scrollTo(0,0);
+}
+
+const OUTREACH_OPEN = ["pending", "emails generated"];  // statuses where the queue is still actionable
+
+async function openQueue(id){
+  currentCampaign = id;
+  showView("queue");
+  $("#q_title").textContent = "Approval queue";
+  $("#q_sub").textContent = "Loading…";
+  $("#q_list").innerHTML = "";
+  try{
+    const camp = await api(`/api/campaigns/${id}`);
+    const d = await api(`/api/campaigns/${id}/queue`);
+    const locked = !OUTREACH_OPEN.includes((camp.status||"").toLowerCase());
+
+    $("#q_title").textContent = (camp.campaign_name||("Campaign "+id)) + (locked ? " — outreach record" : " — approval queue");
+    $("#q_sub").textContent = locked
+      ? `Outreach complete · status: ${camp.status} · ${d.pending_count} email(s) were left unsent`
+      : `${d.pending_count} emails pending approval · status: ${camp.status}`;
+
+    // Footer: hide actions when locked; show a banner instead.
+    $("#q_footbar").style.display = locked ? "none" : "flex";
+    $("#q_lockedNote").style.display = locked ? "block" : "none";
+
+    renderQueue(d.emails||[], locked);
+  }catch(e){ toast("Couldn't load queue: "+e.message); $("#q_sub").textContent=""; }
+}
+
+function esc(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+function renderQueue(emails, locked=false){
+  $("#q_empty").style.display = emails.length? "none":"block";
+  $("#q_list").innerHTML = emails.map(em=>{
+    const [cls,lbl] = badgeMap[em.email_type] || ["fol", em.email_type||"Email"];
+    const inputs = locked
+      ? `<label>Subject</label><input value="${esc(em.subject)}" disabled>
+         <label>Body</label><textarea disabled>${esc(em.body)}</textarea>`
+      : `<label>Subject</label><input class="q_subj" value="${esc(em.subject)}">
+         <label>Body</label><textarea class="q_body">${esc(em.body)}</textarea>`;
+    const actions = locked ? "" : `
+        <div class="qactions">
+          <button class="primary q_approve" data-id="${em.email_id}">Approve &amp; send</button>
+          <button class="q_reject" data-id="${em.email_id}">Reject</button>
+          <span class="dirty">edited — saves on approve</span>
+        </div>`;
+    return `<div class="qrow${locked?' locked':''}" data-id="${em.email_id}">
+      <div class="qhead">
+        <span class="badge ${cls}">${lbl}</span>
+        <div class="who">
+          <div class="co">${esc(em.company_name)||"&nbsp;"}</div>
+          <div class="to">${esc(em.recipient_name)? esc(em.recipient_name)+" · ":""}${esc(em.recipient_email)}</div>
+        </div>
+        <span class="chev">›</span>
+      </div>
+      <div class="qbody">
+        ${inputs}
+        ${actions}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function lockRow(row, label){
+  row.classList.add("done");
+  row.classList.remove("open");
+  // Make the row truly inert: no expand, no edits, no re-send.
+  row.querySelectorAll("input,textarea,button").forEach(el=> el.disabled = true);
+  const badge = row.querySelector(".qhead .badge");
+  if(badge){ badge.textContent = label; badge.style.background="#eef1f6"; badge.style.color="#5d6b85"; }
+  row.querySelector(".qhead").style.cursor = "default";
+}
+
+// expand/collapse + dirty tracking
+$("#q_list").addEventListener("click", e=>{
+  const head = e.target.closest(".qhead");
+  if(head && !e.target.closest("button")){
+    const row = head.closest(".qrow");
+    if(row.classList.contains("done")) return;   // locked: sent or rejected
+    row.classList.toggle("open"); return;
+  }
+});
+$("#q_list").addEventListener("input", e=>{
+  if(e.target.classList.contains("q_subj")||e.target.classList.contains("q_body")){
+    e.target.closest(".qbody").classList.add("isdirty");
+  }
+});
+
+// approve (auto-saves edits first) + reject
+$("#q_list").addEventListener("click", async e=>{
+  const ap = e.target.closest(".q_approve");
+  const rj = e.target.closest(".q_reject");
+  if(!ap && !rj) return;
+  const row = e.target.closest(".qrow");
+  const id = (ap||rj).dataset.id;
+  const body = row.querySelector(".qbody");
+
+  if(ap){
+    ap.disabled=true; ap.innerHTML=`<span class="spin"></span>Sending…`;
+    try{
+      if(body.classList.contains("isdirty")){
+        await api(`/api/emails/${id}/edit`,"POST",{
+          new_subject: row.querySelector(".q_subj").value,
+          new_body: row.querySelector(".q_body").value });
+      }
+      const r = await api(`/api/emails/${id}/approve`,"POST",{});
+      if(r.status==="sent"){ lockRow(row,"Sent"); toast(`Email ${id} sent`); refreshQueueCount(); }
+      else { toast("Could not send: "+(r.reason||r.status)); ap.disabled=false; ap.textContent="Approve & send"; }
+    }catch(err){ toast("Send failed: "+err.message); ap.disabled=false; ap.textContent="Approve & send"; }
+  }
+
+  if(rj){
+    rj.disabled=true;
+    try{
+      await api(`/api/emails/${id}/reject`,"POST",{reason:"Rejected by reviewer"});
+      lockRow(row,"Rejected"); toast(`Email ${id} rejected`); refreshQueueCount();
+    }catch(err){ toast("Reject failed: "+err.message); rj.disabled=false; }
+  }
+});
+
+async function refreshQueueCount(){
+  try{ const d = await api(`/api/campaigns/${currentCampaign}/queue`);
+    const camp = await api(`/api/campaigns/${currentCampaign}`);
+    $("#q_sub").textContent = `${d.pending_count} emails pending approval · status: ${camp.status}`;
+  }catch(e){}
+}
+
+$("#backBtn").onclick = ()=>{ showView("campaigns"); loadCampaigns(); };
+
+
+$("#finalizeBtn").onclick = async ()=>{
+  if(!confirm("Finalize this campaign? Remaining pending emails will not be sent.")) return;
+  const b=$("#finalizeBtn"); b.disabled=true; b.innerHTML=`<span class="spin"></span>Finalizing…`;
+  try{
+    const r = await api(`/api/campaigns/${currentCampaign}/resume`,"POST",{finalize:true});
+    toast(r.state==="complete"? "Campaign finalized" : ("State: "+r.state));
+    showView("campaigns"); loadCampaigns();
+  }catch(e){ toast("Finalize failed: "+e.message); b.disabled=false; b.textContent="Finish outreach"; }
+};
+
+// ── Replies / monitoring screen ──────────────
+const clsMap = {"Interested":"int","Not Interested":"not","Undecided":"und","Scheduled":"sch"};
+
+listEl.addEventListener("click", e=>{
+  const rb = e.target.closest(".replies");
+  if(rb){ openReplies(rb.dataset.id); }
+});
+
+async function openReplies(id){
+  currentCampaign = id;
+  showView("replies");
+  $("#r_sub").textContent = "Loading…";
+  $("#r_list").innerHTML = ""; $("#r_summary").innerHTML = "";
+  try{
+    const camp = await api(`/api/campaigns/${id}`);
+    $("#r_title").textContent = (camp.campaign_name||("Campaign "+id)) + " — replies";
+    await loadReplies(id, camp.status);
+  }catch(e){ toast("Couldn't load replies: "+e.message); $("#r_sub").textContent=""; }
+}
+
+async function loadReplies(id, status){
+  const d = await api(`/api/campaigns/${id}/replies`);
+  const reps = d.replies||[];
+  $("#r_sub").textContent = `${d.count} replies · status: ${status||"—"}`;
+  $("#r_empty").style.display = reps.length? "none":"block";
+
+  const counts = {int:0,not:0,und:0,sch:0};
+  reps.forEach(r=>{ const k=clsMap[r.classification]||"und"; counts[k]++; });
+  $("#r_summary").innerHTML = reps.length ? `
+    <div class="rcount"><span class="dot int"></span><span class="n">${counts.int}</span> Interested</div>
+    <div class="rcount"><span class="dot sch"></span><span class="n">${counts.sch}</span> Scheduled</div>
+    <div class="rcount"><span class="dot und"></span><span class="n">${counts.und}</span> Undecided</div>
+    <div class="rcount"><span class="dot not"></span><span class="n">${counts.not}</span> Not interested</div>` : "";
+
+  $("#r_list").innerHTML = reps.map(r=>{
+    const k = clsMap[r.classification]||"und";
+    const conf = (r.confidence!=null)? `Confidence ${(r.confidence*100).toFixed(0)}% · ${r.llm_model_used||""}` : "";
+    return `<div class="rrow ${k}">
+      <div class="rtop">
+        <div><span class="co">${esc(r.company_name)}</span>
+          <span class="from"> · ${esc(r.reply_from)}</span></div>
+        <span class="cls ${k}">${esc(r.classification||"—")}</span>
+      </div>
+      <div class="body">${esc(r.reply_body)}</div>
+      <div class="conf">${conf}</div>
+    </div>`;
+  }).join("");
+}
+
+// ── Replies screen button handlers ──
+$("#rBackBtn").onclick = ()=>{ showView("campaigns"); loadCampaigns(); };
+
+$("#checkBtn").onclick = async ()=>{
+  const b=$("#checkBtn"); b.disabled=true; b.innerHTML='<span class="spin"></span>Checking…';
+  try{
+    const r = await api(`/api/campaigns/${currentCampaign}/check-replies`,"POST",{});
+    const saved = r.new_replies_saved||0, cl = r.classified_this_run||0;
+    toast(saved? `${saved} new repl${saved>1?'ies':'y'} found, ${cl} classified` : "No new replies");
+    const camp = await api(`/api/campaigns/${currentCampaign}`);
+    await loadReplies(currentCampaign, camp.status);
+  }catch(e){ toast("Check failed: "+e.message); }
+  b.disabled=false; b.textContent="Check for replies";
+};
+
+loadCampaigns();
+</script>
+</body>
+</html>

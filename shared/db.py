@@ -49,6 +49,18 @@ def create_campaign(
     ))
     return row["campaign_id"] if row else None
 
+def list_campaigns() -> list:
+    """All campaigns, newest first, with live counts for the dashboard list."""
+    query = """
+        SELECT campaign_id, campaign_name, status,
+               selected_keywords, date_range_start, date_range_end,
+               total_jobs_found, replies_received, meetings_booked,
+               created_at, last_updated
+        FROM campaigns
+        ORDER BY campaign_id DESC
+    """
+    return fetchall(query)
+
 
 # ─────────────────────────────────────────────
 # Agent 01 — Job Analysis Agent
@@ -961,9 +973,9 @@ def increment_emails_sent(campaign_id: int):
 
 def get_sent_emails_for_inbox(campaign_id: int):
     """
-    Return all SENT emails for a campaign, including their tracking headers.
-    Used by Agent 08's mock/LLM inbox sources to synthesise replies against
-    real email_ids (so foreign keys are always valid).
+    Return SENT *employer outreach* emails for a campaign, with tracking headers.
+    Only employers reply — student notifications are excluded so the mock/LLM
+    inbox never fabricates replies from internal student emails.
     """
     query = """
         SELECT
@@ -978,6 +990,7 @@ def get_sent_emails_for_inbox(campaign_id: int):
         WHERE campaign_id = %s
           AND status = 'Sent'
           AND sent_at IS NOT NULL
+          AND email_type = 'Employer Outreach'
         ORDER BY sent_at ASC
     """
     return fetchall(query, (campaign_id,))
@@ -1165,6 +1178,20 @@ def get_reply_by_id(reply_id: int):
         LIMIT 1
     """
     return fetchone(query, (reply_id,))
+
+def get_replies_for_campaign(campaign_id: int):
+    """All replies for a campaign, newest first, with classification + the email they answered."""
+    query = """
+        SELECT r.reply_id, r.email_id, r.company_name, r.reply_from,
+               r.reply_subject, r.reply_body, r.classification, r.confidence,
+               r.classified_at, r.received_at,
+               e.subject AS original_subject
+        FROM replies r
+        LEFT JOIN emails e ON e.email_id = r.email_id
+        WHERE r.campaign_id = %s
+        ORDER BY r.reply_id DESC
+    """
+    return fetchall(query, (campaign_id,))
 
 def get_unclassified_replies(campaign_id: int):
     """
