@@ -1,4 +1,5 @@
 import json
+import textwrap
 from pathlib import Path
 from typing import Dict, Any, List
 
@@ -208,12 +209,20 @@ def export_pdf_report(report_data: Dict[str, Any], recommendations: List[str]) -
     title("Recommendations", y)
     y -= 30
 
+    # Wrap long recommendation text so it never runs off the page edge.
+    # ~95 chars fits the A4 content width at 10pt Helvetica with a 50px margin.
+    WRAP_WIDTH = 95
     for idx, rec in enumerate(recommendations, 1):
-        if y < 80:
-            c.showPage()
-            y = height - 60
-        line(f"{idx}. {rec}", y, 10)
-        y -= 24
+        wrapped = textwrap.wrap(f"{idx}. {rec}", width=WRAP_WIDTH) or [f"{idx}."]
+        for wrap_idx, text_line in enumerate(wrapped):
+            if y < 80:
+                c.showPage()
+                y = height - 60
+            # Indent continuation lines so they align under the first line's text.
+            indent = "" if wrap_idx == 0 else "   "
+            line(indent + text_line, y, 10)
+            y -= 16
+        y -= 8  # small gap between recommendations
 
     c.save()
     return str(pdf_path)

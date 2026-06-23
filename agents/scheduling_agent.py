@@ -241,27 +241,28 @@ def scheduling_agent(
         duration=duration
     )
 
-    saved_email = db.save_scheduling_email(
-        campaign_id=reply["campaign_id"],
-        recipient_email=contact["contact_email"],
-        recipient_name=contact.get("contact_name"),
-        company_name=reply["company_name"],
-        subject=scheduling_email["subject"],
-        body=scheduling_email["body"],
-        contact_id=contact.get("contact_id")
-    )
+    try:
+        saved = db.save_scheduling_email_and_meeting(
+            campaign_id=reply["campaign_id"],
+            reply_id=reply_id,
+            company_name=reply["company_name"],
+            contact_name=contact.get("contact_name"),
+            contact_email=contact["contact_email"],
+            subject=scheduling_email["subject"],
+            body=scheduling_email["body"],
+            proposed_slots=time_slots,
+            contact_id=contact.get("contact_id"),
+        )
+    except Exception as exc:
+        return {
+            "status": "failed_to_save",
+            "reply_id": reply_id,
+            "company_name": reply["company_name"],
+            "reason": f"Atomic save failed, no partial rows written: {exc}",
+        }
 
-    scheduling_email_id = saved_email["email_id"] if saved_email else None
-
-    saved_meeting = db.save_meeting_record(
-        campaign_id=reply["campaign_id"],
-        reply_id=reply_id,
-        company_name=reply["company_name"],
-        contact_name=contact.get("contact_name"),
-        contact_email=contact["contact_email"],
-        proposed_slots=time_slots,
-        scheduling_email_id=scheduling_email_id
-    )
+    scheduling_email_id = saved["email_id"]
+    meeting_id = saved["meeting_id"]
 
     db.touch_campaign(reply["campaign_id"])
 
@@ -271,7 +272,7 @@ def scheduling_agent(
         "campaign_id": reply["campaign_id"],
         "company_name": reply["company_name"],
         "scheduling_email_id": scheduling_email_id,
-        "meeting_id": saved_meeting.get("meeting_id") if saved_meeting else None,
+        "meeting_id": meeting_id,
         "subject": scheduling_email["subject"],
         "body": scheduling_email["body"]
     }

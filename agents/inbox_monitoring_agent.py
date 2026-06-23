@@ -547,6 +547,13 @@ def run_inbox_monitoring_cycle(campaign_id: Optional[int] = None) -> Dict[str, A
         return {"status": "ok", "campaigns_scanned": 0, "counts": summary}
 
     for cid in campaign_ids:
+        # Forward-only phase marker: first monitoring pass advances the campaign
+        # to 'monitoring'. Guarded so repeated cycles never thrash the status.
+        try:
+            db.mark_campaign_monitoring(cid)
+        except Exception as exc:
+            logger.warning("Could not set 'monitoring' for campaign %s: %s", cid, exc)
+
         try:
             inbox = fetch_inbox(cid)
         except Exception as exc:

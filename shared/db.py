@@ -1128,6 +1128,22 @@ def log_unmatched_reply(reply: dict):
     )
     return None
 
+def mark_campaign_monitoring(campaign_id: int):
+    """
+    Advance a campaign to 'monitoring' on the first inbox pass.
+    Forward-only: the guard stops repeated cycles from thrashing the status
+    and never pulls a 'reported'/'complete' campaign backwards.
+    """
+    query = """
+        UPDATE campaigns
+        SET status = 'monitoring',
+            last_updated = NOW()
+        WHERE campaign_id = %s
+          AND status NOT IN ('monitoring', 'reported', 'complete')
+        RETURNING campaign_id, status
+    """
+    return execute(query, (campaign_id,))
+
 # ─────────────────────────────────────────────
 # Agent 09 — Response Classification Agent
 # ─────────────────────────────────────────────
@@ -1180,12 +1196,13 @@ def save_reply_classification(
     query = """
         UPDATE replies
         SET classification = %s,
+            confidence = %s,
             classified_at = NOW(),
             llm_model_used = %s
         WHERE reply_id = %s
-        RETURNING reply_id, classification, classified_at
+        RETURNING reply_id, classification, confidence, classified_at
     """
-    return execute(query, (classification, llm_model_used, reply_id))
+    return execute(query, (classification, confidence, llm_model_used, reply_id))
 
 
 def mark_company_closed(campaign_id: int, company_name: str):
@@ -1336,16 +1353,6 @@ def mark_followup_company_closed(campaign_id: int, company_name: str):
 # Agent 11 — Scheduling Agent
 # ─────────────────────────────────────────────
 
-def get_email_strategy(campaign_id: int, company_name: str):
-    query = """
-        SELECT *
-        FROM email_strategies
-        WHERE campaign_id = %s
-        AND company_name = %s
-        LIMIT 1
-    """
-    return fetchone(query, (campaign_id, company_name))
-
 
 def get_contact_by_company(company_name: str):
     query = """
@@ -1453,6 +1460,65 @@ def mark_meeting_confirmed(campaign_id: int, company_name: str, confirmed_slot):
         """, (campaign_id,))
 
     return result
+
+def save_scheduling_email_and_meeting(
+    campaign_id: int,
+    reply_id: int,
+    company_name: str,
+    contact_name,
+    contact_email: str,
+    subject: str,
+    body: str,
+    proposed_slots,
+    contact_id=None,
+):
+    """
+    Atomically insert the Scheduling email AND its meeting row on ONE
+    connection/transaction. Either both rows are written or neither is.
+
+    Returns {"email_id": int, "meeting_id": int} on success.
+    Raises on failure (after rollback) so the caller can report a clean
+    failure instead of leaving an orphan scheduling email in the queue.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                """
+                INSERT INTO emails (
+                    campaign_id, email_type, recipient_email, recipient_name,
+                    subject, body, company_name, contact_id, status, created_at
+                )
+                VALUES (%s, 'Scheduling', %s, %s, %s, %s, %s, %s, 'Pending Approval', NOW())
+                RETURNING email_id
+                """,
+                (campaign_id, contact_email, contact_name, subject, body,
+                 company_name, contact_id),
+            )
+            email_id = cursor.fetchone()["email_id"]
+
+            cursor.execute(
+                """
+                INSERT INTO meetings (
+                    campaign_id, reply_id, company_name, contact_name,
+                    contact_email, proposed_slots, status, scheduling_email_id,
+                    reminder_sent, created_at, last_updated
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, 'Proposed', %s, FALSE, NOW(), NOW())
+                RETURNING meeting_id
+                """,
+                (campaign_id, reply_id, company_name, contact_name,
+                 contact_email, proposed_slots, email_id),
+            )
+            meeting_id = cursor.fetchone()["meeting_id"]
+
+        conn.commit()
+        return {"email_id": email_id, "meeting_id": meeting_id}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 # ─────────────────────────────────────────────
 # Agent 12 — Reporting Agent

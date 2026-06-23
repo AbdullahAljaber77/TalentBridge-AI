@@ -4,9 +4,10 @@ from typing import Dict, Any, Optional
 from shared import db
 
 try:
-    from shared.llm import call_llm
+    from shared.llm import call_llm, DEFAULT_MODEL
 except Exception:
     call_llm = None
+    DEFAULT_MODEL = "unknown"
 
 
 VALID_CLASSIFICATIONS = [
@@ -16,7 +17,6 @@ VALID_CLASSIFICATIONS = [
     "Undecided"
 ]
 
-LLM_MODEL_NAME = "default-llm"
 
 
 def build_classification_prompt(reply: dict, original_email: dict) -> str:
@@ -231,12 +231,16 @@ def classify_reply(reply: dict, original_email: dict) -> Dict[str, Any]:
             parsed = parse_json_response(response)
 
             if parsed:
-                return evaluate_classification(parsed)
+                result = evaluate_classification(parsed)
+                result["model_used"] = DEFAULT_MODEL
+                return result
         except Exception:
             pass
 
     fallback = keyword_fallback_classification(reply.get("reply_body", ""))
-    return evaluate_classification(fallback)
+    result = evaluate_classification(fallback)
+    result["model_used"] = "keyword-fallback"
+    return result
 
 
 def take_action_after_classification(reply: dict, result: Dict[str, Any]) -> Dict[str, Any]:
@@ -298,7 +302,7 @@ def response_classification_agent(reply_id: int) -> Dict[str, Any]:
         reply_id=reply_id,
         classification=result["classification"],
         confidence=result["confidence"],
-        llm_model_used=LLM_MODEL_NAME
+        llm_model_used=result.get("model_used", "unknown")
     )
 
     action = take_action_after_classification(reply, result)
