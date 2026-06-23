@@ -1166,6 +1166,21 @@ def get_reply_by_id(reply_id: int):
     """
     return fetchone(query, (reply_id,))
 
+def get_unclassified_replies(campaign_id: int):
+    """
+    Replies for a campaign not yet classified (classified_at IS NULL).
+    The monitoring graph's classify node uses this to sweep anything Agent 08
+    saved with classification deferred.
+    """
+    query = """
+        SELECT reply_id, company_name, classification
+        FROM replies
+        WHERE campaign_id = %s
+          AND classified_at IS NULL
+        ORDER BY reply_id
+    """
+    return fetchall(query, (campaign_id,))
+
 
 def get_original_email(email_id: int):
     query = """

@@ -472,7 +472,8 @@ def _new_summary() -> Dict[str, int]:
     }
 
 
-def _process_single_reply(reply: Dict[str, Any], summary: Dict[str, int]) -> None:
+def _process_single_reply(reply: Dict[str, Any], summary: Dict[str, int],
+                          auto_classify: bool = True) -> None:
     """
     Run one reply through match -> dedupe -> save -> progress -> classify.
 
@@ -499,7 +500,7 @@ def _process_single_reply(reply: Dict[str, Any], summary: Dict[str, int]) -> Non
 
         update_campaign_progress(match["campaign_id"])
 
-        if trigger_classification(reply_id):
+        if auto_classify and trigger_classification(reply_id):
             summary["classified"] += 1
 
     except Exception as exc:  # last line of defence — never propagate
@@ -524,7 +525,8 @@ def _resolve_campaign_ids(campaign_id: Optional[int]) -> List[int]:
     return [c["campaign_id"] for c in active if c.get("campaign_id") is not None]
 
 
-def run_inbox_monitoring_cycle(campaign_id: Optional[int] = None) -> Dict[str, Any]:
+def run_inbox_monitoring_cycle(campaign_id: Optional[int] = None,
+                               auto_classify: bool = True) -> Dict[str, Any]:
     """
     Run ONE inbox-monitoring pass.
 
@@ -568,7 +570,7 @@ def run_inbox_monitoring_cycle(campaign_id: Optional[int] = None) -> Dict[str, A
 
         summary["fetched"] += len(inbox)
         for reply in inbox:
-            _process_single_reply(reply, summary)
+            _process_single_reply(reply, summary, auto_classify=auto_classify)
 
     logger.info("Inbox monitor cycle complete: %s", summary)
     return {
