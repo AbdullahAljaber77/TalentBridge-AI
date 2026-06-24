@@ -1562,6 +1562,18 @@ def save_scheduling_email_and_meeting(
     finally:
         conn.close()
 
+def get_meetings_for_campaign(campaign_id: int):
+    """All meetings for a campaign, with their reply + status."""
+    query = """
+        SELECT meeting_id, reply_id, company_name, contact_name, contact_email,
+               proposed_slots, confirmed_slot, status, scheduling_email_id,
+               created_at, last_updated
+        FROM meetings
+        WHERE campaign_id = %s
+        ORDER BY meeting_id DESC
+    """
+    return fetchall(query, (campaign_id,))
+
 # ─────────────────────────────────────────────
 # Agent 12 — Reporting Agent
 # ─────────────────────────────────────────────

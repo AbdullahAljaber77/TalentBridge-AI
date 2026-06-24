@@ -117,6 +117,31 @@
   .rrow .body{font-size:13.5px;color:#33415c;line-height:1.5;white-space:pre-wrap;
     max-height:80px;overflow:hidden;position:relative}
   .rrow .conf{font-size:11px;color:var(--muted);margin-top:6px}
+  .pendwrap{background:#fff;border:1px solid var(--line);border-radius:10px;
+    box-shadow:var(--shadow);margin-bottom:20px;overflow:hidden}
+  .pendwrap .ph{padding:11px 16px;border-bottom:1px solid var(--line);
+    font-weight:600;font-size:13.5px;background:#fef0db;color:var(--amber-deep)}
+  .pendrow{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .pendrow:last-child{border-bottom:none}
+  .pendrow.done{opacity:.5}
+  .pendrow .badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;background:#e6f4ec;color:var(--green)}
+  .pendrow .badge.fol{background:#eef1f6;color:var(--muted)}
+  .pendrow .info{flex:1;min-width:0}
+  .pendrow .info .co{font-weight:600;font-size:14px}
+  .pendrow .info .subj{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .metric{background:#fff;border:1px solid var(--line);border-radius:var(--r);
+    box-shadow:var(--shadow);padding:18px}
+  .metric .big{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+  .metric .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:6px}
+  .metric .sub{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .repcard{background:#fff;border:1px solid var(--line);border-radius:var(--r);
+    box-shadow:var(--shadow);padding:20px;margin-bottom:16px}
+  .repcard h3{font-size:15px;margin-bottom:12px}
+  .rec{padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;line-height:1.55;color:#33415c;display:flex;gap:10px}
+  .rec:last-child{border-bottom:none}
+  .rec .num{color:var(--amber-deep);font-weight:700;flex-shrink:0}
+  .dlbtn{display:inline-block;background:var(--ink);color:#fff;padding:10px 18px;border-radius:8px;
+    text-decoration:none;font-size:14px;font-weight:600}
 </style>
 </head>
 <body>
@@ -180,10 +205,61 @@
     <button class="amber" id="checkBtn">Check for replies</button>
   </div>
   <div id="r_summary" style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap"></div>
+  <div id="r_pending"></div>
   <div id="r_list"></div>
   <div id="r_empty" class="empty" style="display:none">
     No replies yet. Click <strong>Check for replies</strong> to scan the inbox.
   </div>
+</div>
+
+<!-- Schedule meeting modal -->
+<div class="scrim" id="schedScrim">
+  <div class="modal">
+    <h2>Propose a meeting</h2>
+    <div class="body">
+      <p class="muted" style="margin-top:0;font-size:13.5px" id="sched_who"></p>
+      <div class="field">
+        <label>Time slots <span class="muted">(one per line)</span></label>
+        <textarea id="sched_slots" style="width:100%;min-height:90px;padding:9px 11px;
+          border:1px solid var(--line);border-radius:8px;font:inherit"
+          placeholder="Monday June 30 - 10:00 AM&#10;Tuesday July 1 - 2:00 PM"></textarea>
+        <div class="hint">Offer 2–3 options, exactly as the employer will read them.</div>
+      </div>
+      <div class="two">
+        <div class="field">
+          <label>Format</label>
+          <select id="sched_format">
+            <option>Google Meet</option><option>Zoom</option>
+            <option>Microsoft Teams</option><option>Phone call</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Duration</label>
+          <select id="sched_duration">
+            <option>15 minutes</option><option selected>30 minutes</option><option>45 minutes</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <button id="schedCancel">Cancel</button>
+      <button class="amber" id="schedGo">Send scheduling email</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reports view -->
+<div class="wrap" id="view-reports" style="display:none">
+  <div class="bar">
+    <div>
+      <button id="repBackBtn" style="margin-bottom:8px">← Back to campaigns</button>
+      <h2 id="rep_title">Campaign report</h2>
+      <div class="muted" id="rep_sub" style="font-size:13px;margin-top:2px"></div>
+    </div>
+    <button class="amber" id="genReportBtn">Generate full report (PDF)</button>
+  </div>
+  <div id="rep_metrics" class="grid" style="margin-bottom:22px"></div>
+  <div id="rep_extra"></div>
 </div>
 
 <!-- Create modal -->
@@ -311,6 +387,19 @@ function statusClass(s){
   return "pending";
 }
 
+function actionsFor(c){
+  const s = (c.status||"").toLowerCase();
+  const id = c.campaign_id;
+  if(s === "pending"){
+    return `<button class="amber launch" data-id="${id}">Launch outreach</button>
+            <button class="queue" data-id="${id}">View queue</button>`;
+  }
+  // already launched → outreach record + monitoring actions
+  return `<button class="queue" data-id="${id}">View queue</button>
+          <button class="replies" data-id="${id}">Replies</button>
+          <button class="reports" data-id="${id}">Reports</button>`;
+}
+
 function cardHTML(c){
   const kws = Array.isArray(c.selected_keywords)? c.selected_keywords.join(", ") : (c.selected_keywords||"");
   const launchable = ["pending","emails generated"].includes((c.status||"").toLowerCase());
@@ -327,11 +416,7 @@ function cardHTML(c){
       <div class="stat"><div class="n">${c.replies_received??0}</div><div class="l">Replies</div></div>
       <div class="stat"><div class="n">${c.meetings_booked??0}</div><div class="l">Meetings</div></div>
     </div>
-    <div class="actions">
-      <button class="amber launch" data-id="${c.campaign_id}">Launch outreach</button>
-      <button class="queue" data-id="${c.campaign_id}">View queue</button>
-      <button class="replies" data-id="${c.campaign_id}">Replies</button>
-    </div>
+    <div class="actions">${actionsFor(c)}</div>
   </div>`;
 }
 
@@ -431,6 +516,7 @@ function showView(which){
   $("#view-campaigns").style.display = which==="campaigns"? "block":"none";
   $("#view-queue").style.display = which==="queue"? "block":"none";
   $("#view-replies").style.display = which==="replies"? "block":"none";
+  $("#view-reports").style.display = which==="reports"? "block":"none";
   window.scrollTo(0,0);
 }
 
@@ -592,9 +678,16 @@ async function openReplies(id){
 }
 
 async function loadReplies(id, status){
-  const d = await api(`/api/campaigns/${id}/replies`);
+  const [d, mdata] = await Promise.all([
+    api(`/api/campaigns/${id}/replies`),
+    api(`/api/campaigns/${id}/meetings`).catch(()=>({meetings:[]}))
+  ]);
   const reps = d.replies||[];
+  const meetingByReply = {};
+  (mdata.meetings||[]).forEach(m=>{ meetingByReply[m.reply_id] = m; });
+
   $("#r_sub").textContent = `${d.count} replies · status: ${status||"—"}`;
+  loadPendingSends(id);
   $("#r_empty").style.display = reps.length? "none":"block";
 
   const counts = {int:0,not:0,und:0,sch:0};
@@ -608,6 +701,23 @@ async function loadReplies(id, status){
   $("#r_list").innerHTML = reps.map(r=>{
     const k = clsMap[r.classification]||"und";
     const conf = (r.confidence!=null)? `Confidence ${(r.confidence*100).toFixed(0)}% · ${r.llm_model_used||""}` : "";
+    const m = meetingByReply[r.reply_id];
+    const canSchedule = (r.classification==="Interested" || r.classification==="Scheduled");
+    let meetingHTML = "";
+    if(m){
+      if(m.status==="Confirmed"){
+        meetingHTML = `<div class="conf" style="color:var(--green);font-weight:600">✓ Meeting confirmed · ${esc(m.confirmed_slot||"")}</div>`;
+      } else {
+        const slots = Array.isArray(m.proposed_slots)? m.proposed_slots : [];
+        meetingHTML = `<div style="margin-top:10px;padding:11px 13px;background:#f6f7fb;border:1px solid var(--line);border-radius:8px">
+          <div style="font-size:12.5px;font-weight:600;color:var(--amber-deep);margin-bottom:8px">Meeting proposed — confirm a slot once the employer replies:</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            ${slots.map(s=>`<button class="confirm-slot" data-co="${esc(r.company_name)}" data-slot="${esc(s)}">${esc(s)}</button>`).join("")}
+          </div></div>`;
+      }
+    } else if(canSchedule){
+      meetingHTML = `<div style="margin-top:9px"><button class="sched" data-reply="${r.reply_id}" data-co="${esc(r.company_name)}">Schedule meeting</button></div>`;
+    }
     return `<div class="rrow ${k}">
       <div class="rtop">
         <div><span class="co">${esc(r.company_name)}</span>
@@ -616,6 +726,7 @@ async function loadReplies(id, status){
       </div>
       <div class="body">${esc(r.reply_body)}</div>
       <div class="conf">${conf}</div>
+      ${meetingHTML}
     </div>`;
   }).join("");
 }
@@ -634,6 +745,193 @@ $("#checkBtn").onclick = async ()=>{
   }catch(e){ toast("Check failed: "+e.message); }
   b.disabled=false; b.textContent="Check for replies";
 };
+
+// ── Schedule meeting dialog ──
+let schedReplyId = null;
+
+$("#r_list").addEventListener("click", e=>{
+  const sb = e.target.closest(".sched");
+  if(sb){
+    schedReplyId = sb.dataset.reply;
+    $("#sched_who").textContent = `Proposing a meeting with ${sb.dataset.co}. The employer receives a scheduling email with your slots.`;
+    $("#sched_slots").value = "";
+    $("#schedScrim").classList.add("on");
+  }
+});
+
+$("#schedCancel").onclick = ()=> $("#schedScrim").classList.remove("on");
+$("#schedScrim").onclick = e=>{ if(e.target===$("#schedScrim")) $("#schedScrim").classList.remove("on"); };
+
+$("#schedGo").onclick = async ()=>{
+  const slots = $("#sched_slots").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  if(!slots.length){ toast("Add at least one time slot."); return; }
+  const b=$("#schedGo"); b.disabled=true; b.innerHTML='<span class="spin"></span>Sending…';
+  try{
+    await api(`/api/replies/${schedReplyId}/schedule`,"POST",{
+      time_slots:slots, meeting_format:$("#sched_format").value, duration:$("#sched_duration").value });
+    $("#schedScrim").classList.remove("on");
+    toast("Scheduling email created · meeting proposed");
+    const camp = await api(`/api/campaigns/${currentCampaign}`);
+    await loadReplies(currentCampaign, camp.status);
+  }catch(e){ toast("Schedule failed: "+e.message); }
+  b.disabled=false; b.textContent="Send scheduling email";
+};
+
+// ── Pending sends (Scheduling / Follow-up) — expandable + editable, send-only ──
+async function loadPendingSends(id){
+  let emails = [];
+  try{ const d = await api(`/api/campaigns/${id}/pending-sends`); emails = d.emails||[]; }
+  catch(e){ emails = []; }
+  const box = $("#r_pending");
+  if(!emails.length){ box.innerHTML = ""; return; }
+  box.innerHTML = `<div class="pendwrap">
+    <div class="ph">Emails ready to send — ${emails.length} scheduling / follow-up email(s) awaiting your approval</div>
+    ${emails.map(e=>{
+      const fol = e.email_type==="Follow-up";
+      return `<div class="qrow" data-id="${e.email_id}" style="margin:0;border-radius:0;border-left:none;border-right:none;border-top:none;box-shadow:none">
+        <div class="qhead">
+          <span class="badge ${fol?'fol':'sch'}">${e.email_type}</span>
+          <div class="who"><div class="co">${esc(e.company_name)}</div>
+            <div class="to">${esc(e.subject)}</div></div>
+          <span class="chev">›</span>
+        </div>
+        <div class="qbody">
+          <label>Subject</label>
+          <input class="q_subj" value="${esc(e.subject)}">
+          <label>Body</label>
+          <textarea class="q_body">${esc(e.body)}</textarea>
+          <div class="qactions">
+            <button class="primary ps_approve" data-id="${e.email_id}">Approve &amp; send</button>
+            <span class="dirty">edited — saves on approve</span>
+          </div>
+        </div>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+
+
+// expand/collapse + dirty tracking + send (reuses queue edit/approve endpoints)
+$("#r_pending").addEventListener("click", e=>{
+  const head = e.target.closest(".qhead");
+  if(head && !e.target.closest("button")){
+    const row = head.closest(".qrow");
+    if(!row.classList.contains("done")) row.classList.toggle("open");
+  }
+});
+$("#r_pending").addEventListener("input", e=>{
+  if(e.target.classList.contains("q_subj")||e.target.classList.contains("q_body")){
+    e.target.closest(".qbody").classList.add("isdirty");
+  }
+});
+$("#r_pending").addEventListener("click", async e=>{
+  const ap = e.target.closest(".ps_approve");
+  if(!ap) return;
+  const row = ap.closest(".qrow");
+  const body = row.querySelector(".qbody");
+  const id = ap.dataset.id;
+  ap.disabled=true; ap.innerHTML='<span class="spin"></span>Sending…';
+  try{
+    if(body.classList.contains("isdirty")){
+      await api(`/api/emails/${id}/edit`,"POST",{
+        new_subject: row.querySelector(".q_subj").value,
+        new_body: row.querySelector(".q_body").value });
+    }
+    const r = await api(`/api/emails/${id}/approve`,"POST",{});
+    if(r.status==="sent"){
+      row.classList.add("done"); row.classList.remove("open");
+      row.querySelectorAll("input,textarea,button").forEach(el=>el.disabled=true);
+      const badge=row.querySelector(".badge"); if(badge){badge.textContent="Sent";badge.style.background="#eef1f6";badge.style.color="#5d6b85";}
+      toast(`Email ${id} sent`);
+    } else { toast("Could not send: "+(r.reason||r.status)); ap.disabled=false; ap.textContent="Approve & send"; }
+  }catch(err){ toast("Send failed: "+err.message); ap.disabled=false; ap.textContent="Approve & send"; }
+});
+
+$("#r_pending").addEventListener("click", async e=>{
+  const btn = e.target.closest(".send-now");
+  if(!btn) return;
+  const row = btn.closest(".pendrow");
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span>Sending…';
+  try{
+    const r = await api(`/api/emails/${btn.dataset.id}/approve`,"POST",{});
+    if(r.status==="sent"){ row.classList.add("done");
+      row.querySelectorAll("button").forEach(b=>b.disabled=true);
+      btn.textContent="Sent"; toast(`Email ${btn.dataset.id} sent`); }
+    else { toast("Could not send: "+(r.reason||r.status)); btn.disabled=false; btn.textContent="Approve & send"; }
+  }catch(err){ toast("Send failed: "+err.message); btn.disabled=false; btn.textContent="Approve & send"; }
+});
+
+// ── Reports screen ──
+listEl.addEventListener("click", e=>{
+  const rb = e.target.closest(".reports");
+  if(rb){ openReports(rb.dataset.id); }
+});
+
+async function openReports(id){
+  currentCampaign = id;
+  showView("reports");
+  $("#rep_sub").textContent = "Loading metrics…";
+  $("#rep_metrics").innerHTML = ""; $("#rep_extra").innerHTML = "";
+  try{
+    const camp = await api(`/api/campaigns/${id}`);
+    $("#rep_title").textContent = (camp.campaign_name||("Campaign "+id)) + " — report";
+    const d = await api(`/api/campaigns/${id}/dashboard`);
+    renderMetrics(d, camp.status);
+  }catch(e){ toast("Couldn't load report: "+e.message); $("#rep_sub").textContent=""; }
+}
+
+function renderMetrics(d, status){
+  const em = d.emails||{}, rep = d.replies||{}, mt = d.meetings||{}, pa = d.pending_actions||{};
+  $("#rep_sub").textContent = `Status: ${status||"—"} · response rate ${d.response_rate ?? 0}%`;
+  $("#rep_metrics").innerHTML = `
+    <div class="metric"><div class="big">${em.sent ?? 0}</div><div class="lbl">Emails sent</div>
+      <div class="sub">${em.employer_emails ?? 0} employer · ${em.student_emails ?? 0} student · ${em.followup_emails ?? 0} follow-up</div></div>
+    <div class="metric"><div class="big">${rep.total_replies ?? 0}</div><div class="lbl">Replies</div>
+      <div class="sub">${rep.interested ?? 0} interested · ${rep.not_interested ?? 0} not · ${rep.undecided ?? 0} undecided</div></div>
+    <div class="metric"><div class="big">${mt.confirmed ?? 0}<span style="font-size:16px;color:var(--muted)"> / ${mt.total_meetings ?? 0}</span></div>
+      <div class="lbl">Meetings confirmed</div><div class="sub">${mt.proposed ?? 0} proposed</div></div>
+    <div class="metric"><div class="big">${d.response_rate ?? 0}%</div><div class="lbl">Response rate</div>
+      <div class="sub">${pa.undecided_replies ?? 0} undecided · ${pa.pending_followups ?? 0} pending follow-ups</div></div>`;
+}
+
+$("#repBackBtn").onclick = ()=>{ showView("campaigns"); loadCampaigns(); };
+
+$("#genReportBtn").onclick = async ()=>{
+  const b=$("#genReportBtn"); b.disabled=true; b.innerHTML='<span class="spin"></span>Generating…';
+  $("#rep_extra").innerHTML = `<div class="muted" style="padding:10px 0">Generating recommendations and PDF — a few seconds…</div>`;
+  try{
+    const r = await api(`/api/campaigns/${currentCampaign}/full-report`,"POST",{});
+    const recs = r.recommendations||[];
+    const kws = (r.top_keywords||[]).map(k=>k.keyword).filter(Boolean);
+    $("#rep_extra").innerHTML = `
+      <div class="repcard">
+        <h3>Full report ready</h3>
+        <a class="dlbtn" href="/api/campaigns/${currentCampaign}/report-pdf" target="_blank">⬇ Download PDF</a>
+      </div>
+      ${recs.length? `<div class="repcard"><h3>Recommendations</h3>
+        ${recs.map((t,i)=>`<div class="rec"><span class="num">${i+1}.</span><span>${esc(t)}</span></div>`).join("")}
+      </div>`:""}
+      ${kws.length? `<div class="repcard"><h3>Top keywords</h3>
+        <div class="muted" style="font-size:13.5px">${kws.map(esc).join(" · ")}</div></div>`:""}`;
+    toast("Report generated");
+  }catch(e){ toast("Report failed: "+e.message); $("#rep_extra").innerHTML=""; }
+  b.disabled=false; b.textContent="Generate full report (PDF)";
+};
+
+// confirm a proposed meeting slot
+$("#r_list").addEventListener("click", async e=>{
+  const btn = e.target.closest(".confirm-slot");
+  if(!btn) return;
+  const co = btn.dataset.co, slot = btn.dataset.slot;
+  if(!confirm(`Confirm the meeting with ${co} for:\n${slot}?`)) return;
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
+  try{
+    await api(`/api/campaigns/${currentCampaign}/confirm-meeting`,"POST",{company_name:co, confirmed_slot:slot});
+    toast(`Meeting with ${co} confirmed`);
+    const camp = await api(`/api/campaigns/${currentCampaign}`);
+    await loadReplies(currentCampaign, camp.status);
+  }catch(err){ toast("Confirm failed: "+err.message); btn.disabled=false; btn.textContent=slot; }
+});
 
 loadCampaigns();
 </script>

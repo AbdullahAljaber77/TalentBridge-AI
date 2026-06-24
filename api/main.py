@@ -89,6 +89,9 @@ def launch(campaign_id: int, params: LaunchParams, background: BackgroundTasks):
     current = _launch_status.get(campaign_id, {}).get("state")
     if current == "running":
         raise HTTPException(status_code=409, detail="Launch already in progress")
+    if (camp.get("status") or "").lower() != "pending":
+        raise HTTPException(status_code=409,
+            detail=f"Campaign already launched (status: {camp.get('status')}). Use the queue or replies view.")
 
     background.add_task(_run_launch, campaign_id, params.model_dump())
     return {"campaign_id": campaign_id, "state": "running"}
@@ -171,6 +174,96 @@ def get_replies(campaign_id: int):
     """All replies for a campaign, with classification."""
     rows = db.get_replies_for_campaign(campaign_id) or []
     return {"campaign_id": campaign_id, "count": len(rows), "replies": rows}
+
+# ─────────────────────────────────────────────
+# Scheduling — propose a meeting for an interested reply
+# ─────────────────────────────────────────────
+
+class ScheduleRequest(BaseModel):
+    time_slots: List[str] = Field(..., min_length=1)
+    meeting_format: str = "Google Meet"
+    duration: str = "30 minutes"
+
+
+@app.post("/api/replies/{reply_id}/schedule")
+def schedule_meeting(reply_id: int, payload: ScheduleRequest):
+    from agents.scheduling_agent import scheduling_agent
+    result = scheduling_agent(
+        reply_id,
+        time_slots=payload.time_slots,
+        meeting_format=payload.meeting_format,
+        duration=payload.duration,
+    )
+    if result.get("status") == "failed_validation":
+        raise HTTPException(status_code=400, detail=result.get("reason"))
+    if result.get("status", "").startswith("failed") or result.get("status") == "missing_contact":
+        raise HTTPException(status_code=400, detail=result.get("reason", result.get("status")))
+    return result
+
+class ConfirmRequest(BaseModel):
+    company_name: str
+    confirmed_slot: str
+
+
+@app.post("/api/campaigns/{campaign_id}/confirm-meeting")
+def confirm_meeting_endpoint(campaign_id: int, payload: ConfirmRequest):
+    from agents.scheduling_agent import confirm_meeting
+    result = confirm_meeting(campaign_id, payload.company_name, payload.confirmed_slot)
+    if result.get("status") == "not_found":
+        raise HTTPException(status_code=404, detail="No proposed meeting found for that company")
+    return result
+
+
+@app.get("/api/campaigns/{campaign_id}/meetings")
+def get_meetings(campaign_id: int):
+    """All meetings for a campaign (to show 'meeting proposed/confirmed' state)."""
+    rows = db.get_meetings_for_campaign(campaign_id) or []
+    return {"campaign_id": campaign_id, "count": len(rows), "meetings": rows}
+
+@app.get("/api/campaigns/{campaign_id}/pending-sends")
+def pending_sends(campaign_id: int):
+    """
+    Post-outreach emails (Scheduling, Follow-up) still awaiting send.
+    These are generated during monitoring, after the outreach queue is finalized.
+    """
+    emails = db.get_pending_emails(campaign_id) or []
+    post = [e for e in emails if e.get("email_type") in ("Scheduling", "Follow-up")]
+    return {"campaign_id": campaign_id, "count": len(post), "emails": post}
+
+# ─────────────────────────────────────────────
+# Reports — dashboard metrics + full PDF report
+# ─────────────────────────────────────────────
+
+@app.get("/api/campaigns/{campaign_id}/dashboard")
+def campaign_dashboard(campaign_id: int):
+    """Live metrics for the reports screen (fast, no PDF, no LLM)."""
+    from agents.reporting_agent import reporting_agent
+    try:
+        result = reporting_agent(campaign_id, mode="dashboard")
+        return result.get("data", result)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/campaigns/{campaign_id}/full-report")
+def campaign_full_report(campaign_id: int):
+    """Generate the full report (metrics + recommendations + PDF). Slower (LLM)."""
+    from agents.reporting_agent import reporting_agent
+    try:
+        result = reporting_agent(campaign_id, mode="full_report")
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/campaigns/{campaign_id}/report-pdf")
+def download_report_pdf(campaign_id: int):
+    """Serve the generated PDF for download."""
+    pdf_path = Path("reports") / f"campaign_report_{campaign_id}.pdf"
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail="No report generated yet. Generate the full report first.")
+    return FileResponse(str(pdf_path), media_type="application/pdf",
+                        filename=f"campaign_{campaign_id}_report.pdf")
 
 # ─────────────────────────────────────────────
 # API: campaigns
