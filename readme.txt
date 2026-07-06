@@ -1,7 +1,9 @@
 # TalentBridge AI — Employer Outreach Program Agent 
 ### Agentic AI Bootcamp — Final Production Framework (SDA / WeCloudData)
-### Team Architecture: Abdulmohsen Alghamdi | Osama Alhazmi | Abdullah Aljaber
-
+### Project Team:
+- Abdulmohsen Alghamdi
+- Osama Alhazmi
+- Abdullah Aljaber
 ---
 
 ##  Repository Architecture Overview
