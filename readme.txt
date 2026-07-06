@@ -1,11 +1,14 @@
 # TalentBridge AI
+
 ### Multi-Agent Recruitment Platform
 
-### Agentic AI Bootcamp — Final Production Framework (SDA / WeCloudData)
+**Agentic AI Bootcamp – Final Capstone Project (Saudi Digital Academy & WeCloudData)**
+
+---
 
 ## Overview
 
-TalentBridge AI is a production-ready multi-agent recruitment platform designed to automate employer outreach, candidate matching, and HR workflows using Large Language Models (LLMs).
+TalentBridge AI is a capstone multi-agent recruitment platform designed to automate employer outreach, candidate matching, and HR workflows using Large Language Models (LLMs).
 
 The platform leverages LangGraph, LangChain, FastAPI, PostgreSQL, and Retrieval-Augmented Generation (RAG) to build scalable AI-driven recruitment workflows through a modular multi-agent architecture.
 
@@ -27,17 +30,6 @@ The platform leverages LangGraph, LangChain, FastAPI, PostgreSQL, and Retrieval-
 - OpenAI API
 - Retrieval-Augmented Generation (RAG)
 
-## Key Features
-
-- Multi-Agent Architecture powered by LangGraph
-- Intelligent employer outreach automation
-- AI-powered candidate matching
-- Retrieval-Augmented Generation (RAG)
-- Human-in-the-Loop (HITL) validation
-- FastAPI backend services
-- PostgreSQL database integration
-- Streamlit interactive interface
-
 ### Backend
 - Python
 - FastAPI
@@ -54,20 +46,46 @@ The platform leverages LangGraph, LangChain, FastAPI, PostgreSQL, and Retrieval-
 
 ---
 
+## Key Features
+
+- Multi-Agent architecture powered by LangGraph
+- Intelligent employer outreach automation
+- AI-powered candidate matching
+- Retrieval-Augmented Generation (RAG)
+- Human-in-the-Loop (HITL) validation
+- FastAPI backend services
+- PostgreSQL database integration
+- Streamlit interactive user interface
+
+---
+
 ## Repository Architecture Overview
 
-This repository implements a production-ready, modular multi-agent platform using LangGraph, FastAPI, and Streamlit.
+This repository implements a modular multi-agent platform built with LangGraph, FastAPI, and Streamlit.
 
 ```text
 talentbridge-ai/
 ├── data/          ← Cleaned datasets, compliance playbooks, and outreach templates
 ├── database/      ← PostgreSQL relational system blueprints and seed records
 ├── shared/        ← Data schemas, configuration instances, and core LLM wrappers
-├── rag/           ← Semantics-based embeddings and knowledge retrieval indices
-├── agents/        ← Specialized Python logic routines for all 12 system agents
-├── tools/         ← External system connectivity engines (Search, Email, APIs)
-├── graph/         ← LangGraph pipeline engine and background runtime task schedulers
-├── api/           ← Unified FastAPI server application routes
-├── frontend/      ← Streamlit interactive client-side application interface
-└── tests/         ← Quality-assurance end-to-end multi-agent validation scripts
+├── rag/           ← Semantic embeddings and knowledge retrieval indices
+├── agents/        ← Specialized Python logic for all 12 AI agents
+├── tools/         ← External integrations (Search, Email, APIs)
+├── graph/         ← LangGraph workflow orchestration and background schedulers
+├── api/           ← FastAPI backend services
+├── frontend/      ← Streamlit user interface
+└── tests/         ← End-to-end validation and testing
 ```
+
+---
+
+## Core Technologies
+
+- Python
+- LangGraph
+- LangChain
+- FastAPI
+- PostgreSQL
+- Streamlit
+- OpenAI API
+- Retrieval-Augmented Generation (RAG)
