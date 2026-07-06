@@ -1,10 +1,15 @@
-# TalentBridge AI — Employer Outreach Program Agent 
+# TalentBridge AI — Employer Outreach Program Agent
+
 ### Agentic AI Bootcamp — Final Production Framework (SDA / WeCloudData)
-### Project Team:
+
+## Overview
+
+TalentBridge AI is a production-ready multi-agent recruitment platform that automates employer outreach, candidate matching, and HR workflows using Large Language Models (LLMs). The platform leverages LangGraph, LangChain, FastAPI, PostgreSQL, and Retrieval-Augmented Generation (RAG) to build scalable AI-driven recruitment workflows.
+
+### Project Team
 - Abdulmohsen Alghamdi
 - Osama Alhazmi
 - Abdullah Aljaber
----
 
 ##  Repository Architecture Overview
 This workspace implements a robust, completely decoupled multi-agent engine using LangGraph, FastAPI, and Streamlit.
