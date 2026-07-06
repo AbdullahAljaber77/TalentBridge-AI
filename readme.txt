@@ -4,15 +4,47 @@
 
 ## Overview
 
-TalentBridge AI is a production-ready multi-agent recruitment platform that automates employer outreach, candidate matching, and HR workflows using Large Language Models (LLMs). The platform leverages LangGraph, LangChain, FastAPI, PostgreSQL, and Retrieval-Augmented Generation (RAG) to build scalable AI-driven recruitment workflows.
+TalentBridge AI is a production-ready multi-agent recruitment platform designed to automate employer outreach, candidate matching, and HR workflows using Large Language Models (LLMs).
 
-### Project Team
+The platform leverages LangGraph, LangChain, FastAPI, PostgreSQL, and Retrieval-Augmented Generation (RAG) to build scalable AI-driven recruitment workflows through a modular multi-agent architecture.
+
+---
+
+## Project Team
+
 - Abdulmohsen Alghamdi
 - Osama Alhazmi
 - Abdullah Aljaber
 
-##  Repository Architecture Overview
-This workspace implements a robust, completely decoupled multi-agent engine using LangGraph, FastAPI, and Streamlit.
+---
+
+## Technology Stack
+
+### AI & LLM Frameworks
+- LangGraph
+- LangChain
+- OpenAI API
+- Retrieval-Augmented Generation (RAG)
+
+### Backend
+- Python
+- FastAPI
+- PostgreSQL
+
+### Frontend
+- Streamlit
+
+### AI Concepts
+- Multi-Agent Systems
+- Human-in-the-Loop (HITL)
+- Vector Databases
+- Prompt Engineering
+
+---
+
+## Repository Architecture Overview
+
+This repository implements a production-ready, modular multi-agent platform using LangGraph, FastAPI, and Streamlit.
 
 ```text
 talentbridge-ai/
@@ -26,3 +58,4 @@ talentbridge-ai/
 ├── api/           ← Unified FastAPI server application routes
 ├── frontend/      ← Streamlit interactive client-side application interface
 └── tests/         ← Quality-assurance end-to-end multi-agent validation scripts
+```
