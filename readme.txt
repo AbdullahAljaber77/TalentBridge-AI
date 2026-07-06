@@ -1,4 +1,5 @@
-# TalentBridge AI — Employer Outreach Program Agent
+# TalentBridge AI
+### Multi-Agent Recruitment Platform
 
 ### Agentic AI Bootcamp — Final Production Framework (SDA / WeCloudData)
 
@@ -25,6 +26,17 @@ The platform leverages LangGraph, LangChain, FastAPI, PostgreSQL, and Retrieval-
 - LangChain
 - OpenAI API
 - Retrieval-Augmented Generation (RAG)
+
+## Key Features
+
+- Multi-Agent Architecture powered by LangGraph
+- Intelligent employer outreach automation
+- AI-powered candidate matching
+- Retrieval-Augmented Generation (RAG)
+- Human-in-the-Loop (HITL) validation
+- FastAPI backend services
+- PostgreSQL database integration
+- Streamlit interactive interface
 
 ### Backend
 - Python
